@@ -1,0 +1,326 @@
+{
+  "nodes": [
+    {
+      "id": "apps/petstore",
+      "type": "application",
+      "description": "Main B2C storefront application"
+    },
+    {
+      "id": "apps/opc",
+      "type": "application",
+      "description": "Order Processing Center for async fulfillment"
+    },
+    {
+      "id": "apps/admin",
+      "type": "application",
+      "description": "Admin operations portal"
+    },
+    {
+      "id": "apps/supplier",
+      "type": "application",
+      "description": "Supplier integration and PO management"
+    },
+    {
+      "id": "components/cart",
+      "type": "component",
+      "description": "Shopping cart EJB and model"
+    },
+    {
+      "id": "components/catalog",
+      "type": "component",
+      "description": "Product catalog with DAO-based data access"
+    },
+    {
+      "id": "components/creditcard",
+      "type": "component",
+      "description": "Credit card entity bean and validation"
+    },
+    {
+      "id": "components/customer",
+      "type": "component",
+      "description": "Customer profile and data management"
+    },
+    {
+      "id": "components/purchaseorder",
+      "type": "component",
+      "description": "Purchase order model and business logic"
+    },
+    {
+      "id": "components/lineitem",
+      "type": "component",
+      "description": "Order line item entity bean"
+    },
+    {
+      "id": "components/signon",
+      "type": "component",
+      "description": "Authentication and sign-on EJB"
+    },
+    {
+      "id": "components/address",
+      "type": "component",
+      "description": "Address entity bean"
+    },
+    {
+      "id": "components/contactinfo",
+      "type": "component",
+      "description": "Contact information entity bean"
+    },
+    {
+      "id": "components/processmanager",
+      "type": "component",
+      "description": "Order workflow state machine"
+    },
+    {
+      "id": "components/supplierpo",
+      "type": "component",
+      "description": "Supplier purchase order model"
+    },
+    {
+      "id": "components/asyncsender",
+      "type": "component",
+      "description": "Async message sending for order events"
+    },
+    {
+      "id": "components/mailer",
+      "type": "component",
+      "description": "Email notification sender"
+    },
+    {
+      "id": "components/uidgen",
+      "type": "component",
+      "description": "Unique ID generation service"
+    },
+    {
+      "id": "components/xmldocuments",
+      "type": "component",
+      "description": "XML document models and transformations"
+    },
+    {
+      "id": "components/servicelocator",
+      "type": "component",
+      "description": "JNDI service locator pattern"
+    },
+    {
+      "id": "components/util",
+      "type": "component",
+      "description": "Utility functions"
+    },
+    {
+      "id": "components/encodingfilter",
+      "type": "component",
+      "description": "Character encoding filter"
+    }
+  ],
+  "edges": [
+    {
+      "source": "apps/petstore",
+      "target": "components/cart",
+      "type": "uses",
+      "reason": "Add/remove items from shopping cart"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/catalog",
+      "type": "uses",
+      "reason": "Browse products and categories"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/creditcard",
+      "type": "uses",
+      "reason": "Credit card validation and storage"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/customer",
+      "type": "uses",
+      "reason": "User profile and account management"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/purchaseorder",
+      "type": "uses",
+      "reason": "Create and manage orders"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/signon",
+      "type": "uses",
+      "reason": "User authentication"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/uidgen",
+      "type": "uses",
+      "reason": "Generate unique order IDs"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/asyncsender",
+      "type": "uses",
+      "reason": "Send order messages asynchronously"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/servicelocator",
+      "type": "uses",
+      "reason": "JNDI lookup of EJB components"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/contactinfo",
+      "type": "uses",
+      "reason": "Store shipping and billing contact info"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/address",
+      "type": "uses",
+      "reason": "Store shipping and billing addresses"
+    },
+    {
+      "source": "apps/petstore",
+      "target": "components/lineitem",
+      "type": "uses",
+      "reason": "Create order line items"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/processmanager",
+      "type": "uses",
+      "reason": "Update order status in fulfillment workflow"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/purchaseorder",
+      "type": "uses",
+      "reason": "Retrieve and update purchase orders"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/lineitem",
+      "type": "uses",
+      "reason": "Process order line items"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/contactinfo",
+      "type": "uses",
+      "reason": "Access customer contact info"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/address",
+      "type": "uses",
+      "reason": "Access customer addresses"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/xmldocuments",
+      "type": "uses",
+      "reason": "XML serialization for orders and approvals"
+    },
+    {
+      "source": "apps/opc",
+      "target": "components/mailer",
+      "type": "uses",
+      "reason": "Send approval and notification emails"
+    },
+    {
+      "source": "apps/admin",
+      "target": "components/processmanager",
+      "type": "uses",
+      "reason": "Manage order approval workflow"
+    },
+    {
+      "source": "apps/admin",
+      "target": "components/xmldocuments",
+      "type": "uses",
+      "reason": "XML document handling for admin operations"
+    },
+    {
+      "source": "apps/supplier",
+      "target": "components/supplierpo",
+      "type": "uses",
+      "reason": "Manage supplier purchase orders"
+    },
+    {
+      "source": "apps/supplier",
+      "target": "components/lineitem",
+      "type": "uses",
+      "reason": "Access order line items"
+    },
+    {
+      "source": "apps/supplier",
+      "target": "components/processmanager",
+      "type": "uses",
+      "reason": "Update order status"
+    },
+    {
+      "source": "apps/supplier",
+      "target": "components/xmldocuments",
+      "type": "uses",
+      "reason": "XML serialization for supplier orders"
+    },
+    {
+      "source": "components/cart",
+      "target": "components/catalog",
+      "type": "uses",
+      "reason": "Reference catalog items in cart"
+    },
+    {
+      "source": "components/customer",
+      "target": "components/contactinfo",
+      "type": "uses",
+      "reason": "Store customer contact information"
+    },
+    {
+      "source": "components/customer",
+      "target": "components/creditcard",
+      "type": "uses",
+      "reason": "Associate credit cards with customer"
+    },
+    {
+      "source": "components/purchaseorder",
+      "target": "components/lineitem",
+      "type": "uses",
+      "reason": "Order contains line items"
+    },
+    {
+      "source": "components/purchaseorder",
+      "target": "components/address",
+      "type": "uses",
+      "reason": "Shipping and billing addresses"
+    },
+    {
+      "source": "components/purchaseorder",
+      "target": "components/contactinfo",
+      "type": "uses",
+      "reason": "Shipping and billing contact info"
+    },
+    {
+      "source": "components/purchaseorder",
+      "target": "components/creditcard",
+      "type": "uses",
+      "reason": "Payment information"
+    },
+    {
+      "source": "components/purchaseorder",
+      "target": "components/xmldocuments",
+      "type": "uses",
+      "reason": "XML serialization of orders"
+    },
+    {
+      "source": "components/creditcard",
+      "target": "components/xmldocuments",
+      "type": "uses",
+      "reason": "XML serialization of credit card data"
+    },
+    {
+      "source": "components/lineitem",
+      "target": "components/xmldocuments",
+      "type": "uses",
+      "reason": "XML serialization of line items"
+    }
+  ]
+}
