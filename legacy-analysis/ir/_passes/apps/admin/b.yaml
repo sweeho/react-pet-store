@@ -1,0 +1,818 @@
+records:
+  # Authentication & Authorization
+  - record_key: ADM-AUTH-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL enforce form-based authentication with username and password
+      for access to the AdminRequestProcessor endpoint. Only users with the
+      'administrator' role SHALL be permitted to access this endpoint.
+    confidence: high
+    confidence_basis: >
+      Security configuration is declared in web.xml with explicit form-login
+      configuration, security-constraint specifying role, and both login and error
+      JSP pages referenced. Multiple layers confirm this (declarative + JSP).
+    risk_class: operational
+    basis: >
+      web.xml lines 75-97 define security-constraint requiring administrator
+      role for /AdminRequestProcessor with FORM auth method. Form login config
+      specifies login.jsp and error.jsp. Login form in login.jsp confirms
+      j_username and j_password fields. Error page confirms failed auth flow.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/WEB-INF/web.xml
+        line_start: 75
+        line_end: 97
+        excerpt: |
+          <security-constraint>
+            <web-resource-collection>
+              <web-resource-name>MySecureBit0</web-resource-name>
+              <url-pattern>/AdminRequestProcessor</url-pattern>
+              <http-method>GET</http-method>
+              <http-method>POST</http-method>
+            </web-resource-collection>
+            <auth-constraint>
+              <role-name>administrator</role-name>
+            </auth-constraint>
+            <user-data-constraint>
+              <transport-guarantee>NONE</transport-guarantee>
+            </user-data-constraint>
+          </security-constraint>
+          <login-config>
+            <auth-method>FORM</auth-method>
+            <form-login-config>
+              <form-login-page>/login.jsp</form-login-page>
+              <form-error-page>/error.jsp</form-error-page>
+            </form-login-config>
+          </login-config>
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/login.jsp
+        line_start: 52
+        line_end: 66
+        excerpt: |
+          <form action="j_security_check" method=post>
+          <table>
+          <tr>
+           <td align="center" >
+           <table border="0">
+           <tr>
+            <td><b>User ID:</b></td>
+            <td>
+              <input type="text" size="15" name="j_username" value="jps_admin">
+            </td>
+           </tr>
+           <tr>
+            <td><b>Password:</b></td>
+             <td>
+              <input type="password" size="15" name="j_password" value="admin">
+            </td>
+    stack_metadata:
+      framework: servlet
+      declarative_validator: web.xml
+
+  - record_key: ADM-AUTH-0002
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      Session timeout for authenticated admin users SHALL be 54 minutes of inactivity.
+    confidence: high
+    confidence_basis: >
+      Session timeout is declared explicitly in web.xml session-config element.
+      This is enforced by the servlet container and applies globally.
+    risk_class: operational
+    basis: >
+      web.xml lines 67-69 define session-config with session-timeout value of 54 minutes.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/WEB-INF/web.xml
+        line_start: 67
+        line_end: 69
+        excerpt: |
+          <session-config>
+            <session-timeout>54</session-timeout>
+          </session-config>
+    stack_metadata:
+      framework: servlet
+
+  # Session Management
+  - record_key: ADM-SESSION-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL maintain authenticated sessions for the Java Web Start rich client.
+      The session ID SHALL be passed from the web tier to the rich client via JNLP
+      application arguments to enable client authentication without additional login.
+    confidence: high
+    confidence_basis: >
+      AdminRequestProcessor.buildJNLP() explicitly includes req.getSession().getId()
+      as an argument. Servlet framework ensures session is established before JNLP
+      generation. Both client-side (JNLP generation) and server-side (session check)
+      confirm this behavior.
+    risk_class: operational
+    basis: >
+      AdminRequestProcessor lines 91 append session ID as JNLP argument for the
+      rich client to attach to server session. ApplRequestProcessor lines 88-98
+      check for session existence; if null, error is returned.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/AdminRequestProcessor.java
+        line_start: 87
+        line_end: 95
+        excerpt: |
+          jnlp.append("<application-desc main-class=\"com.sun.j2ee.blueprints.admin.client.PetStoreAdminClient\">\n");
+          jnlp.append("<argument>com.sun.j2ee.blueprints.admin.client.HttpPostPetStoreProxy</argument>\n");
+          jnlp.append("<argument>").append(serverName).append("</argument>\n");
+          jnlp.append("<argument>").append(serverPort).append("</argument>\n");
+          jnlp.append("<argument>").append(req.getSession().getId()).append("</argument>\n");
+          jnlp.append("</application-desc>\n</jnlp>\n");
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 88
+        line_end: 99
+        excerpt: |
+          HttpSession session = req.getSession(false);
+          ServletOutputStream out = resp.getOutputStream();
+          if(session == null) {
+              out.println(replyHeader +
+                          "<Error>Session Timed Out; Please exit and " +
+                          "login as admin from the login page</Error>\n" +
+                          "</Response>\n");
+    stack_metadata:
+      framework: servlet
+
+  # Rich Client Deployment
+  - record_key: ADM-DEPLOY-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL support launching a Java Web Start (JNLP) based rich client
+      application from the web interface. The AdminRequestProcessor servlet SHALL
+      generate JNLP manifest files dynamically when the currentScreen parameter
+      equals 'manageorders'.
+    confidence: high
+    confidence_basis: >
+      AdminRequestProcessor.doPost() explicitly checks for currentScreen parameter
+      and calls buildJNLP() to generate JNLP content. Index.jsp provides user
+      interface to trigger this flow. Content type is set to application/x-java-jnlp-file.
+    risk_class: operational
+    basis: >
+      AdminRequestProcessor lines 102-119 show doPost handler checking curScreen
+      parameter and conditionally generating JNLP. Index.jsp lines 67-74 show
+      form submission to AdminRequestProcessor with currentScreen='manageorders'.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/AdminRequestProcessor.java
+        line_start: 102
+        line_end: 119
+        excerpt: |
+          public void doPost(HttpServletRequest req, HttpServletResponse resp)
+          throws IOException, ServletException {
+              String curScreen = req.getParameter("currentScreen");
+              if (curScreen == null) {
+                  return;
+              }
+              curScreen = curScreen.trim();
+              if(curScreen.equals("logout")) {
+                  getServletConfig().getServletContext().getRequestDispatcher("/logout.jsp").forward(req, resp);
+              }
+              if(curScreen.equals("manageorders")) {
+                  resp.setContentType("application/x-java-jnlp-file");
+                  ServletOutputStream out = resp.getOutputStream();
+                  out.println(buildJNLP(req));
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/index.jsp
+        line_start: 67
+        line_end: 74
+        excerpt: |
+          <form action="AdminRequestProcessor" method=post>
+          <p>
+          <p>
+          <p>
+           To launch the JAVA Web Start based Rich Client click here :
+          <input type="hidden" name="currentScreen" value="manageorders">
+          <input type="submit" value="Launch Rich Client">
+          </form>
+    stack_metadata:
+      framework: servlet
+      jsp.page: index.jsp
+
+  - record_key: ADM-DEPLOY-0002
+    kind: entity
+    capability_key: admin-operations
+    requirement: >
+      JNLP application descriptor SHALL include: main class
+      (com.sun.j2ee.blueprints.admin.client.PetStoreAdminClient), proxy class
+      argument (HttpPostPetStoreProxy), server hostname, server port, and
+      authenticated session ID as application arguments.
+    confidence: high
+    confidence_basis: >
+      buildJNLP() method explicitly constructs JNLP XML with all required elements.
+      The structure is hardcoded and shows exact element names and values.
+    risk_class: operational
+    basis: >
+      AdminRequestProcessor.buildJNLP() lines 63-95 show complete JNLP document
+      construction including application-desc with main-class and multiple arguments.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/AdminRequestProcessor.java
+        line_start: 63
+        line_end: 95
+        excerpt: |
+          protected String buildJNLP(HttpServletRequest req) throws ServletException {
+              String serverName = req.getServerName();
+              int serverPort = req.getServerPort();
+              StringBuffer jnlp = new StringBuffer();
+              jnlp.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+              jnlp.append("<jnlp codebase=\"http://").append(serverName).append(":").append(serverPort).append("/admin\">\n");
+              jnlp.append("<information>\n").append("<title>Pet Store Admin Rich Client</title>\n");
+              jnlp.append("<vendor>J2EE BluePrints</vendor>\n");
+              jnlp.append("<resources>\n");
+              jnlp.append("<j2se version=\"1.4\"/>\n");
+              jnlp.append("<jar href=\"AdminApp.jar\"/>\n");
+              jnlp.append("<application-desc main-class=\"com.sun.j2ee.blueprints.admin.client.PetStoreAdminClient\">\n");
+              jnlp.append("<argument>com.sun.j2ee.blueprints.admin.client.HttpPostPetStoreProxy</argument>\n");
+              jnlp.append("<argument>").append(serverName).append("</argument>\n");
+              jnlp.append("<argument>").append(serverPort).append("</argument>\n");
+              jnlp.append("<argument>").append(req.getSession().getId()).append("</argument>\n");
+    stack_metadata:
+      framework: servlet
+
+  # XML Protocol and Request/Response
+  - record_key: ADM-PROTOCOL-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      Rich client and web tier SHALL communicate via XML protocol over HTTP.
+      Request XML SHALL include a Type element specifying the operation.
+      Supported request types are: GETORDERS, UPDATESTATUS, REVENUE, ORDERS.
+      Response XML SHALL include a Type element and either success data or
+      an Error element.
+    confidence: high
+    confidence_basis: >
+      ApplRequestProcessor.processRequest() explicitly parses incoming XML string,
+      extracts Type element, and dispatches to operation-specific handlers. Each
+      handler builds XML response. Multiple request types are explicitly checked.
+    risk_class: operational
+    basis: >
+      ApplRequestProcessor lines 122-147 show XML parsing and Type element extraction
+      with explicit if-else chain checking for GETORDERS, UPDATESTATUS, REVENUE,
+      ORDERS. Response construction shows replyHeader prepended to all responses.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 122
+        line_end: 147
+        excerpt: |
+          String processRequest(String xmlString) {
+              try {
+                  InputSource source =
+                      new InputSource(new ByteArrayInputStream(xmlString.getBytes()));
+                  DocumentBuilder db =
+                      DocumentBuilderFactory.newInstance().newDocumentBuilder();
+                  Element root = db.parse(source).getDocumentElement();
+                  String reqType = getValue(root.getElementsByTagName("Type").item(0));
+                  if (reqType.equals("GETORDERS")) {
+                      return getOrders(root);
+                  }
+                  else if (reqType.equals("UPDATESTATUS")) {
+                      return updateOrders(root);
+                  }
+                  else if (reqType.equals("REVENUE") || reqType.equals("ORDERS")) {
+                      return getChartInfo(root, reqType);
+                  }
+                  else {
+                      return replyHeader + "<Error>Unable to process request : " +
+                          "Unknown request type - " + reqType + "</Error>\n</Response>\n";
+                  }
+    stack_metadata:
+      framework: servlet
+
+  - record_key: ADM-PROTOCOL-0002
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      All XML responses SHALL be prefixed with XML declaration and opening Response
+      tag, and closed with closing Response tag. Content type for responses SHALL
+      be set to 'text/xml'.
+    confidence: high
+    confidence_basis: >
+      ApplRequestProcessor defines replyHeader constant at class level that is
+      prepended to all responses. Content type is explicitly set in doPost().
+    risk_class: operational
+    basis: >
+      ApplRequestProcessor lines 73-74 define replyHeader. Line 101 sets content type.
+      All response builders append replyHeader and close with </Response>.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 73
+        line_end: 75
+        excerpt: |
+          String replyHeader = "<?xml version=\"1.0\" standalone=\"yes\"?>\n" +
+              "<Response>\n";
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 100
+        line_end: 102
+        excerpt: |
+          String sId = session.getId();
+          resp.setContentType("text/xml");
+          BufferedReader inp = req.getReader();
+    stack_metadata:
+      framework: servlet
+
+  # Order Query Operations
+  - record_key: ADM-ORDER-QUERY-0001
+    kind: requirement
+    capability_key: order-fulfillment
+    requirement: >
+      The system SHALL allow authenticated admin users to retrieve orders filtered
+      by order status. Query requests SHALL be submitted as XML with a Status element.
+      Response SHALL be XML containing an order list with OrderId, UserId, OrderDate,
+      OrderAmount, and OrderStatus fields for each order.
+    confidence: high
+    confidence_basis: >
+      ApplRequestProcessor.getOrders() implements this feature. XML request parsing
+      explicitly extracts Status element. Response construction shows each required
+      field being appended to XML. Method is invoked for GETORDERS request type.
+    risk_class: operational
+    basis: >
+      ApplRequestProcessor lines 166-203 show getOrders() processing GETORDERS requests.
+      Status element extraction at line 170. Response building at lines 177-194 shows
+      each field (OrderId, UserId, OrderDate, OrderAmount, OrderStatus) appended.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 133
+        line_end: 135
+        excerpt: |
+          if (reqType.equals("GETORDERS")) {
+              return getOrders(root);
+          }
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 166
+        line_end: 203
+        excerpt: |
+          String getOrders(Element root) {
+              try {
+                  AdminRequestBD bd = new AdminRequestBD();
+                  NodeList nl = root.getElementsByTagName("Status");
+                  String status = getValue(nl.item(0));
+                  OrdersTO orders = bd.getOrdersByStatus(status);
+                  if (orders == null) {
+                      return null;
+                  }
+                  StringBuffer responseBuffer = new StringBuffer(replyHeader);
+                  responseBuffer.append("<Type>GETORDERS</Type>\n");
+                  responseBuffer.append("<Status>" + status + "</Status>\n");
+                  responseBuffer.append("<TotalCount>" + orders.size() + "</TotalCount>\n" );
+                  for (Iterator it = orders.iterator(); it.hasNext(); ) {
+                      OrderDetails o = (OrderDetails) it.next();
+                      responseBuffer.append("<Order>\n");
+                      responseBuffer.append("<OrderId>" + o.getOrderId() + "</OrderId>\n");
+                      responseBuffer.append("<UserId>" + o.getUserId() + "</UserId>\n");
+                      responseBuffer.append("<OrderDate>" + o.getOrderDate() + "</OrderDate>\n");
+                      responseBuffer.append("<OrderAmount>" + o.getOrderValue() + "</OrderAmount>\n");
+                      responseBuffer.append("<OrderStatus>" + o.getOrderStatus() + "</OrderStatus>\n");
+                      responseBuffer.append("</Order>\n");
+                  }
+                  responseBuffer.append("</Response>\n");
+                  return responseBuffer.toString();
+    stack_metadata:
+      framework: servlet
+      ejb.bean: OPCAdminFacade
+
+  - record_key: ADM-ORDER-QUERY-0002
+    kind: entity
+    capability_key: order-fulfillment
+    requirement: >
+      OrderDetails entity SHALL contain orderId, userId, orderDate (formatted
+      as mm/dd/yyyy string), orderValue (float), and orderStatus fields.
+      OrdersTO SHALL be a collection/transfer object that holds multiple
+      OrderDetails instances.
+    confidence: high
+    confidence_basis: >
+      OrderDetails class is defined with all five fields as instance variables
+      and corresponding getter methods. OrdersTO is used as a collection type.
+      Field names and types are explicit in the class definition.
+    risk_class: operational
+    basis: >
+      OrderDetails.java lines 44-80 define the class with five private fields
+      and corresponding getter methods. Constructor accepts all five values.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/opc/src/com/sun/j2ee/blueprints/opc/admin/ejb/OrderDetails.java
+        line_start: 44
+        line_end: 59
+        excerpt: |
+          public class OrderDetails implements java.io.Serializable {
+              private String orderId;
+              private String userId;
+              private String orderDate;
+              private float orderValue;
+              private String orderStatus;
+              public OrderDetails(String oid, String uid, String date, float value,
+                                  String stat) {
+                  orderId = oid;
+                  userId = uid;
+                  orderDate = date;
+                  orderValue = value;
+                  orderStatus = stat;
+              }
+    stack_metadata:
+      ejb.bean: OPCAdminFacade
+
+  # Order Status Updates
+  - record_key: ADM-ORDER-UPDATE-0001
+    kind: requirement
+    capability_key: order-fulfillment
+    requirement: >
+      The system SHALL allow authenticated admin users to update order statuses.
+      Update requests SHALL be submitted as XML containing Order elements, each
+      with OrderId and OrderStatus child elements. The system SHALL send updated
+      orders asynchronously to the AsyncSender EJB for processing.
+    confidence: medium
+    confidence_basis: >
+      ApplRequestProcessor.updateOrders() processes UPDATESTATUS requests and builds
+      ChangedOrder objects from XML. AdminRequestBD.updateOrders() sends OrderApproval
+      via AsyncSender. However, no validation of status values is visible in the servlet;
+      possible validation occurs in OrderApproval or downstream.
+    risk_class: financial
+    basis: >
+      ApplRequestProcessor lines 205-237 show updateOrders() extracting OrderId and
+      OrderStatus from XML Order elements and creating ChangedOrder objects. Code comment
+      at line 207 indicates schema mapping assumption. AdminRequestBD lines 115-130 show
+      updateOrders() looking up AsyncSender and sending OrderApproval XML.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 205
+        line_end: 237
+        excerpt: |
+          String updateOrders(Element root) {
+              // a better solution would be using a style sheet to convert from
+              // one schema to the other
+              OrderApproval oa = new OrderApproval();
+              NodeList nl = root.getElementsByTagName("Order");
+              for (int i = 0; i < nl.getLength(); i++) {
+                  Element e = (Element) nl.item(i);
+                  // Assumes values of OrderStatus are the same for both schemas
+                  String orderId =
+                      getValue((Element) e.getElementsByTagName("OrderId").item(0));
+                  String orderStatus =
+                      getValue((Element) e.getElementsByTagName("OrderStatus").item(0));
+                  if (orderId != null && orderStatus != null) {
+                      oa.addOrder(new ChangedOrder(orderId, orderStatus));
+                  }
+              }
+              try {
+                  AdminRequestBD bd = new AdminRequestBD();
+                  bd.updateOrders(oa);
+                  return replyHeader + "<Type>UPDATEORDERS</Type>\n"
+                      + "<Status>SUCCESS</Status>\n"
+                      + "</Response>\n";
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/AdminRequestBD.java
+        line_start: 115
+        line_end: 130
+        excerpt: |
+          public void updateOrders(OrderApproval oa) throws AdminBDException {
+              try {
+                  AsyncSenderLocalHome home = (AsyncSenderLocalHome)
+                      ServiceLocator.getInstance().getLocalHome(JNDINames.ASYNCSENDER_LOCAL_EJB_HOME);
+                  AsyncSender sender= home.create();
+                  sender.sendAMessage(oa.toXML());
+    stack_metadata:
+      framework: servlet
+      jms.queue: AsyncSender
+      ejb.bean: AsyncSender
+
+  # Analytics - Revenue Reporting
+  - record_key: ADM-ANALYTICS-REV-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL support revenue reporting for a specified date range.
+      Admin users may optionally filter by product category. When no category
+      filter is provided, revenue SHALL be aggregated by CategoryId. When a
+      category filter is provided, revenue SHALL be aggregated by ItemId within
+      that category. Response SHALL include aggregated revenue amounts and a
+      TotalSales sum.
+    confidence: high
+    confidence_basis: >
+      ApplRequestProcessor.getChartInfo() processes REVENUE request type and calls
+      OPCAdminFacadeEJB.getChartInfo(). OPCAdminFacadeEJB implements conditional
+      aggregation logic based on category parameter. Both revenue calculation and
+      aggregation are shown explicitly in code.
+    risk_class: operational
+    basis: >
+      ApplRequestProcessor lines 239-305 show getChartInfo() handling REVENUE requests
+      with date range and category parameters. OPCAdminFacadeEJB lines 169-256 show
+      conditional aggregation: if(categ == null) groups by CategoryId, else groups
+      by ItemId within filtered category. Revenue values are accumulated in HashMap.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 239
+        line_end: 279
+        excerpt: |
+          String getChartInfo(Element root, String request) {
+              try {
+                  Map chartInfo = null;
+                  String category = null;
+                  String start = getValue(root.getElementsByTagName("Start").item(0));
+                  String end = getValue(root.getElementsByTagName("End").item(0));
+                  AdminRequestBD bd = new AdminRequestBD();
+                  category = getValue(root.getElementsByTagName("ReqCategory").item(0));
+                  chartInfo = bd.getChartInfo(request, getProperDate(start), getProperDate(end), category);
+                  StringBuffer responseBuffer = new StringBuffer(replyHeader);
+                  String xmlElement = (category == null) ? "Category" : "Item";
+                  responseBuffer.append("<Type>" + request + "</Type>\n");
+                  responseBuffer.append("<Start>" + start + "</Start>\n");
+                  responseBuffer.append("<End>" + end + "</End>\n");
+                  if (request.equals("REVENUE")) {
+                      float totalAmount = 0f;
+                      for (Iterator it = chartInfo.entrySet().iterator(); it.hasNext(); ) {
+                          Map.Entry e = (Map.Entry) it.next();
+                          float amount = ((Float) e.getValue()).floatValue();
+                          totalAmount += amount;
+                          responseBuffer.append("<" + xmlElement + " name=\"" + e.getKey() + "\">");
+                          responseBuffer.append(amount);
+                          responseBuffer.append("</" + xmlElement + ">\n");
+                      }
+                      responseBuffer.append("<TotalSales>");
+                      responseBuffer.append(totalAmount);
+                      responseBuffer.append("</TotalSales>\n");
+    stack_metadata:
+      framework: servlet
+      ejb.bean: OPCAdminFacade
+      db.object: PurchaseOrder, LineItem
+
+  - record_key: ADM-ANALYTICS-REV-0002
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      Revenue per line item SHALL be calculated as: quantity * unit price.
+      Individual line item revenue amounts SHALL be accumulated into the
+      aggregated chart result by summing values for matching category/item keys.
+    confidence: high
+    confidence_basis: >
+      OPCAdminFacadeEJB shows explicit multiplication of quantity and unit price.
+      Accumulation logic using containsKey() check and put() confirms summation.
+    risk_class: financial
+    basis: >
+      OPCAdminFacadeEJB lines 193-218 show revenue calculation in REVENUE request
+      branch: multiplication of loc.getQuantity() * loc.getUnitPrice(). Accumulation
+      at lines 197-200 and 210-212 shows adding to existing value or creating new entry.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/opc/src/com/sun/j2ee/blueprints/opc/admin/ejb/OPCAdminFacadeEJB.java
+        line_start: 193
+        line_end: 218
+        excerpt: |
+          if(request.equals("REVENUE")) {
+              if(categ == null) {
+                  id = loc.getCategoryId();
+                  if(chartDetails.containsKey(id)) {
+                      tmpValue = (Float) chartDetails.get(id);
+                      chartDetails.put(id,
+                           new Float(tmpValue.floatValue() +
+                           (loc.getQuantity()*loc.getUnitPrice())));
+                  } else {
+                      chartDetails.put(id, new Float((loc.getQuantity()*
+                                              loc.getUnitPrice())));
+                  }
+              } else {
+                  if(loc.getCategoryId().equals(categ)) {
+                      id = loc.getItemId();
+                      if(chartDetails.containsKey(id)) {
+                          tmpValue = (Float) chartDetails.get(id);
+                          chartDetails.put(id,
+                            new Float(tmpValue.floatValue() +
+                            (loc.getQuantity()*loc.getUnitPrice())));
+    stack_metadata:
+      ejb.bean: OPCAdminFacade
+
+  # Analytics - Order Volume Reporting
+  - record_key: ADM-ANALYTICS-VOL-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL support order volume reporting (quantity aggregation) for a
+      specified date range. Admin users may optionally filter by product category.
+      When no category filter is provided, quantities SHALL be aggregated by CategoryId.
+      When a category filter is provided, quantities SHALL be aggregated by ItemId
+      within that category. Response SHALL include aggregated quantities and a
+      TotalSales sum of quantities.
+    confidence: high
+    confidence_basis: >
+      ApplRequestProcessor.getChartInfo() processes ORDERS request type with same
+      date range and category parameters as REVENUE. OPCAdminFacadeEJB implements
+      parallel logic for ORDERS that aggregates quantities instead of revenue values.
+    risk_class: operational
+    basis: >
+      ApplRequestProcessor lines 282-297 show handling of ORDERS request with
+      quantity aggregation (Integer type vs Float for revenue). OPCAdminFacadeEJB
+      lines 219-245 show ORDERS branch with getQuantity() accumulation logic.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 282
+        line_end: 297
+        excerpt: |
+          else {
+              int totalQuantity = 0;
+              for (Iterator it = chartInfo.entrySet().iterator(); it.hasNext(); ) {
+                  Map.Entry e = (Map.Entry) it.next();
+                  int quantity = ((Integer) e.getValue()).intValue();
+                  totalQuantity += quantity;
+                  responseBuffer.append("<" + xmlElement + " name=\"" + e.getKey() + "\">");
+                  responseBuffer.append(quantity);
+                  responseBuffer.append("</" + xmlElement + ">\n");
+              }
+              responseBuffer.append("<TotalSales>");
+              responseBuffer.append(totalQuantity);
+              responseBuffer.append("</TotalSales>\n");
+      - path: legacy-source/petstore1.3.2/src/apps/opc/src/com/sun/j2ee/blueprints/opc/admin/ejb/OPCAdminFacadeEJB.java
+        line_start: 219
+        line_end: 245
+        excerpt: |
+          } else {
+              if(categ == null) {
+                  id = loc.getCategoryId();
+                  if(chartDetails.containsKey(id)) {
+                      tmpQty = (Integer) chartDetails.get(id);
+                      chartDetails.put(id,
+                           new Integer(tmpQty.intValue() + loc.getQuantity()));
+                  } else {
+                      chartDetails.put(id, new Integer(loc.getQuantity()));
+                  }
+              } else {
+                  if(loc.getCategoryId().equals(categ)) {
+                      id = loc.getItemId();
+                      if(chartDetails.containsKey(id)) {
+                          tmpQty = (Integer) chartDetails.get(id);
+                          chartDetails.put(id,
+                                  new Integer(tmpQty.intValue() + loc.getQuantity()));
+                      } else {
+                          chartDetails.put(id, new Integer(loc.getQuantity()));
+    stack_metadata:
+      framework: servlet
+      ejb.bean: OPCAdminFacade
+      db.object: PurchaseOrder, LineItem
+
+  # Date Handling
+  - record_key: ADM-DATE-0001
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      Admin report dates SHALL be provided by clients in mm/dd/yyyy format (string).
+      The system SHALL parse these strings and convert them to Date objects for
+      backend processing. OrderDate values in responses SHALL be formatted as
+      mm/dd/yyyy strings.
+    confidence: medium
+    confidence_basis: >
+      ApplRequestProcessor.getProperDate() explicitly parses mm/dd/yyyy format using
+      StringTokenizer and constructs Date objects. OPCAdminFacadeEJB formats dates
+      in mm/dd/yyyy for response. However, use of deprecated Date constructor and
+      arithmetic operations (year-1900, month+1) suggests legacy implementation.
+    risk_class: operational
+    basis: >
+      ApplRequestProcessor lines 319-326 show getProperDate() parsing mm/dd/yyyy
+      with StringTokenizer and creating Date with month-1 and year-1900 adjustments.
+      OPCAdminFacadeEJB lines 144-146 show format conversion using month+1, year+1900.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+        line_start: 319
+        line_end: 326
+        excerpt: |
+          Date getProperDate(String inpDate) {
+              StringTokenizer tokens = new StringTokenizer(inpDate, "/");
+              Integer month = new Integer((String)tokens.nextElement());
+              Integer day = new Integer((String)tokens.nextElement());
+              Integer year = new Integer((String)tokens.nextElement());
+              return(new Date(year.intValue()-1900, month.intValue()-1,
+                              day.intValue()));
+      - path: legacy-source/petstore1.3.2/src/apps/opc/src/com/sun/j2ee/blueprints/opc/admin/ejb/OPCAdminFacadeEJB.java
+        line_start: 144
+        line_end: 149
+        excerpt: |
+          Date gotDate = new Date(po.getPoDate());
+          String podate = (gotDate.getMonth()+1) + "/" +
+              gotDate.getDate() + "/" + (gotDate.getYear()+1900);
+          retVal.add(new OrderDetails(po.getPoId(), po.getPoUserId(),
+                                      podate, po.getPoValue(), status));
+    stack_metadata:
+      framework: servlet
+
+  # Integration
+  - record_key: ADM-INTEGRATION-0001
+    kind: integration
+    capability_key: order-fulfillment
+    requirement: >
+      The admin module SHALL integrate with the Order Processing Component (OPC)
+      via remote OPCAdminFacade EJB. Order queries and analytics requests are
+      served through this remote interface. Order updates SHALL be sent asynchronously
+      through AsyncSender local EJB to enable order approval workflow processing.
+    confidence: high
+    confidence_basis: >
+      AdminRequestBD explicitly looks up and uses both OPCAdminFacadeRemote and
+      AsyncSender via ServiceLocator. Both EJB references are declared in web.xml
+      with home and remote/local interface specifications. The flow is explicit:
+      queries call OPCAdminFacade remote methods; updates call AsyncSender.
+    risk_class: operational
+    basis: >
+      AdminRequestBD lines 78-95 show remote EJB lookup via JNDI for OPCAdminFacade.
+      Lines 115-130 show AsyncSender local EJB lookup for sending order updates.
+      web.xml lines 103-116 declare both EJB references with full interface paths.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/AdminRequestBD.java
+        line_start: 78
+        line_end: 95
+        excerpt: |
+          private String OPC_ADMIN_NAME = "java:comp/env/ejb/OPCAdminFacadeRemote";
+          private OPCAdminFacade opcAdminEJB = null;
+          public AdminRequestBD() throws AdminBDException {
+              try {
+                  OPCAdminFacadeHome home = (OPCAdminFacadeHome) ServiceLocator.getInstance().getRemoteHome(OPC_ADMIN_NAME, OPCAdminFacadeHome.class);
+                  opcAdminEJB = home.create();
+              } catch (ServiceLocatorException sle) {
+                  sle.printStackTrace();
+                  throw new AdminBDException(sle.getMessage());
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/WEB-INF/web.xml
+        line_start: 103
+        line_end: 116
+        excerpt: |
+          <ejb-ref>
+            <ejb-ref-name>ejb/OPCAdminFacadeRemote</ejb-ref-name>
+            <ejb-ref-type>Session</ejb-ref-type>
+            <home>com.sun.j2ee.blueprints.opc.admin.ejb.OPCAdminFacadeHome</home>
+            <remote>com.sun.j2ee.blueprints.opc.admin.ejb.OPCAdminFacade</remote>
+          </ejb-ref>
+          <ejb-local-ref>
+            <ejb-ref-name>ejb/AsyncSender</ejb-ref-name>
+            <ejb-ref-type>Session</ejb-ref-type>
+            <local-home>com.sun.j2ee.blueprints.asyncsender.ejb.AsyncSenderLocalHome</local-home>
+            <local>com.sun.j2ee.blueprints.asyncsender.ejb.AsyncSender</local>
+            <ejb-link>AsyncSenderEJB</ejb-link>
+          </ejb-local-ref>
+    stack_metadata:
+      framework: servlet
+      ejb.bean: OPCAdminFacade, AsyncSender
+
+  # Logout functionality
+  - record_key: ADM-SESSION-LOGOUT-0001
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL provide a logout mechanism that invalidates the authenticated
+      session. When user selects logout via the index page form with currentScreen='logout',
+      the session SHALL be invalidated before redirecting to index.
+    confidence: medium
+    confidence_basis: >
+      logout.jsp explicitly calls request.getSession().invalidate(). Index.jsp provides
+      form to trigger logout. However, post-logout behavior (redirect destination) is
+      performed via include of index.html, which may be incomplete flow.
+    risk_class: operational
+    basis: >
+      logout.jsp lines 42-46 show session invalidation. Index.jsp lines 75-82 show
+      logout form submission. AdminRequestProcessor lines 109-110 forward to logout.jsp.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/logout.jsp
+        line_start: 42
+        line_end: 46
+        excerpt: |
+          <%
+            request.getSession().invalidate();
+          %>
+          <%@include file="index.html" %>
+      - path: legacy-source/petstore1.3.2/src/apps/admin/src/docroot/index.jsp
+        line_start: 75
+        line_end: 82
+        excerpt: |
+          <form action="AdminRequestProcessor" method=post>
+          <p>
+          <p>
+          <p>
+           To logout of Pet Store Admin click here :
+          <input type="hidden" name="currentScreen" value="logout">
+          <input type="submit" value="logout">
+          </form>
+    stack_metadata:
+      framework: servlet
+      jsp.page: logout.jsp
+
+findings:
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+    description: >
+      The updateOrders() method accepts OrderStatus values from client requests and
+      passes them directly to OrderApproval without validation. Code comment at line 207
+      states "a better solution would be using a style sheet to convert from one schema
+      to the other" and line 216 assumes values are identical between schemas. It is
+      unclear what the valid OrderStatus values are and whether any normalization or
+      validation occurs in OrderApproval or downstream. A human should verify the
+      complete status enumeration and any required transformations.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/apps/admin/src/admin/com/sun/j2ee/blueprints/admin/web/ApplRequestProcessor.java
+    description: >
+      Methods getOrders(), updateOrders(), and getChartInfo() can return null when
+      exceptions occur (lines 201, 232-235, 303). When null is returned, the servlet's
+      doPost() method does not appear to send any explicit error response to the client.
+      It is unclear whether a null return results in an empty response, a default error
+      message, or some other behavior. A human should verify the intended behavior when
+      these methods return null and ensure error responses are properly formatted.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/apps/opc/src/com/sun/j2ee/blueprints/opc/admin/ejb/OPCAdminFacadeEJB.java
+    description: >
+      The getChartInfo() method retrieves purchase orders using findPOBetweenDates()
+      with start.getTime() and end.getTime() without documented date range semantics
+      (inclusive, exclusive, or boundary behavior). Additionally, the method retrieves
+      orders by status via ProcessManager.getOrdersByStatus() and then attempts to
+      match them with PurchaseOrder entities by primary key lookup. The exact reconciliation
+      logic and potential data inconsistencies are not visible in the code. A human should
+      verify the date range semantics, order matching logic, and handling of inconsistencies.
