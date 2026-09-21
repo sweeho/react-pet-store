@@ -45,9 +45,39 @@ capabilities:
         - "Duplicate account error screen: displayed when account creation attempts to use an existing username"
         - "Sign-off screen: available to logged-in customers to end their session"
 
+  - slug: catalog-browsing
+    title: Product Catalog Browsing
+    order: 2
+    dependsOn: []
+    priority: 0
+    change:
+      dir: openspec/changes/sx-catalog-browsing
+      specCapabilities:
+        - catalog-browsing
+    canvas:
+      problem: Customers need to browse and search products organized by categories to find items for purchase.
+      solution: Implement product catalog with category retrieval, item listing, pagination, and multi-locale support.
+      userStories:
+        - As a customer, I want to browse products by category to find items I need.
+        - As a customer, I want to see product details including price, description, and attributes.
+        - As a customer, I want to navigate through results with pagination to explore the entire catalog.
+      acceptanceCriteria:
+        - "Category Retrieval — retrieves categories with localization for en_US, ja_JP, zh_CN"
+        - "Product Listing — returns paginated list of items with ID, name, attributes, and unit cost"
+        - "Pagination Metadata — includes hasNextPage flag for UI navigation"
+        - "Locale Support — defaults to en_US; supports customer language preference"
+      outOfScope:
+        - Inventory availability at catalog level
+        - Product recommendations or filtering
+        - Search facets or advanced query syntax
+        - Product reviews or ratings
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+
   - slug: shopping-cart
     title: Shopping Cart Management
-    order: 2
+    order: 3
     dependsOn:
       - user-accounts
     priority: 0
@@ -86,7 +116,7 @@ capabilities:
 
   - slug: order-placement
     title: Purchase Order Creation
-    order: 3
+    order: 5
     dependsOn:
       - shopping-cart
       - user-accounts
@@ -127,7 +157,7 @@ capabilities:
 
   - slug: payment-processing
     title: Credit Card Management
-    order: 3
+    order: 4
     dependsOn:
       - user-accounts
     priority: 0
@@ -159,7 +189,7 @@ capabilities:
 
   - slug: order-tracking
     title: Order Status Management
-    order: 4
+    order: 6
     dependsOn:
       - order-placement
     priority: 0
@@ -193,7 +223,7 @@ capabilities:
 
   - slug: order-fulfillment
     title: Order Fulfillment and Inventory Management
-    order: 5
+    order: 8
     dependsOn:
       - order-tracking
       - supplier-management
@@ -230,7 +260,7 @@ capabilities:
 
   - slug: supplier-management
     title: Supplier Order Management
-    order: 5
+    order: 7
     dependsOn: []
     priority: 0
     change:
@@ -263,6 +293,75 @@ capabilities:
       affectedCode: []
       screens:
         - "Inventory update screen: displays all inventory items in table with Item ID, Current Quantity, New Quantity input, and Update checkbox; restricted to administrators"
+
+  - slug: admin-operations
+    title: Administrative Order and Inventory Management
+    order: 9
+    dependsOn:
+      - supplier-management
+    priority: 0
+    change:
+      dir: openspec/changes/sx-admin-operations
+      specCapabilities:
+        - admin-operations
+    canvas:
+      problem: Administrators need to query orders by status for fulfillment tracking, view order analytics, and trigger order reprocessing when inventory is updated.
+      solution: Implement administrative dashboard with order status queries, date-range analytics, category-based reporting, and admin role-based access control.
+      userStories:
+        - As an admin, I want to view orders by status (PENDING, APPROVED, COMPLETED) to manage fulfillment workflow.
+        - As an admin, I want to query orders by date range and category to analyze business metrics.
+        - As an admin, I want to trigger reprocessing of pending orders when inventory becomes available.
+      acceptanceCriteria:
+        - "Order Query by Status — retrieves all orders in a specific status for dashboard display"
+        - "Order Query by Date Range — filters orders by creation date for analytics"
+        - "Order Query by Category — finds orders containing items from specific product categories"
+        - "Admin Authorization — restricts all admin operations to 'administrator' role"
+        - "Status Transitions — supports PENDING → APPROVED → COMPLETED or PENDING → DENIED workflow"
+        - "Transactional Safety — all operations execute in Required transaction context"
+      outOfScope:
+        - Order fulfillment execution
+        - Detailed order analytics or visualization
+        - Audit logging of administrative actions
+        - Order modification or cancellation
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+      screens:
+        - "Order management dashboard: displays orders grouped by status with filtering by date range and category; shows order ID, user, date, total, status"
+
+  - slug: notifications
+    title: Order Event Notifications
+    order: 10
+    dependsOn:
+      - order-placement
+      - order-tracking
+    priority: 0
+    change:
+      dir: openspec/changes/sx-notifications
+      specCapabilities:
+        - notifications
+    canvas:
+      problem: Customers need to be informed of order confirmations, status changes, and shipment updates via email notifications.
+      solution: Implement asynchronous email notifications via JMS message-driven beans, triggered on order events and status transitions with multi-locale support.
+      userStories:
+        - As a customer, I want to receive an email confirmation when I place an order so I have proof of purchase.
+        - As a customer, I want to be notified when my order status changes (approved, completed, denied) so I know the status of my purchase.
+        - As a customer, I want notifications in my preferred language so I can understand order information clearly.
+      acceptanceCriteria:
+        - "Order Confirmation — sends email with order ID, total, and delivery address when order is created"
+        - "Status Change Notifications — sends email when order transitions to APPROVED, DENIED, or COMPLETED"
+        - "JMS Message Processing — consumes mail messages from queue via MailerMDB.onMessage()"
+        - "Mail Message Structure — parses XML with mandatory Address, Subject, Content elements"
+        - "Locale Support — sends notifications in customer's preferred language (en_US, ja_JP, zh_CN)"
+        - "Transaction Safety — processes messages with container-managed transactions (Required)"
+      outOfScope:
+        - SMS or push notifications
+        - Email delivery confirmation or bounce handling
+        - In-app notification UI
+        - Customer notification preferences per event type
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
 
 artifacts:
   openapi: api/openapi.yaml
