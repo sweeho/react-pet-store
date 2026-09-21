@@ -326,7 +326,7 @@ capabilities:
     change:
       dir: openspec/changes/sx-notifications
       specCapabilities:
-        - customer-notifications
+        - notifications
     canvas:
       problem: |
         Customers need to receive email notifications of order status changes so
