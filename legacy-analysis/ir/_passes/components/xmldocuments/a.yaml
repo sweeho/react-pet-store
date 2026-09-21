@@ -1,0 +1,755 @@
+records:
+  - record_key: XMLDOC-UTIL-0001
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL provide utility methods for parsing XML documents from various sources
+      (streams, SAX sources, DOM sources) with support for DTD and XSD validation.
+    confidence: high
+    confidence_basis: >
+      XMLDocumentUtils.java provides multiple overloaded methods for parsing XML (fromXML methods
+      at lines 503-545). The implementation uses DocumentBuilderFactory with configurable validation
+      (line 516) and custom entity resolution for DTD/XSD support. Multiple source types are
+      supported via polymorphic transform methods (lines 461-501).
+    risk_class: operational
+    basis: >
+      XMLDocumentUtils.java fromXML methods (lines 503-545) provide parsing with configurable
+      validation flags. The custom entity resolver is used to resolve DTD entities from a catalog
+      (line 536). Support for multiple source types is evident in transform methods that handle
+      DOMSource, StreamSource, and SAXSource.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 503
+        line_end: 545
+        excerpt: |
+          public static Document fromXML(Source source, String dtdPublicId, final URL entityCatalogURL, boolean validating)
+                throws XMLDocumentException {
+            return deserialize(createTransformer(), source, dtdPublicId, entityCatalogURL, validating, false);
+          }
+          public static Document fromXML(InputSource source, String dtdPublicId, final URL entityCatalogURL, boolean validating)
+                throws XMLDocumentException {
+            Document document;
+            try {
+              if (source.getSystemId() == null) { // Set the base URI to resolve relative URI
+                source.setSystemId(SCHEMAS_DIRECTORY_PATH);
+              }
+              DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
+              builderFactory.setValidating(validating);
+              DocumentBuilder builder = builderFactory.newDocumentBuilder();
+              builder.setErrorHandler(new ErrorHandler() {
+                public void warning(SAXParseException exception) {
+                  System.err.println("[Warning]: " + exception.getMessage());
+                }
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 461
+        line_end: 501
+        excerpt: |
+          public static Document transform(Transformer transformer, Source source,
+                                           String dtdPublicId, URL entityCatalogURL, boolean validating, boolean xsdSupport)
+                throws XMLDocumentException {
+            DOMResult result = new DOMResult();
+            transform(transformer, source, result, dtdPublicId, entityCatalogURL, validating, xsdSupport);
+            return (Document) result.getNode();
+          }
+          public static void transform(Transformer transformer, Source source, Result result,
+                                           String dtdPublicId, URL entityCatalogURL, boolean validating, boolean xsdSupport)
+                throws XMLDocumentException {
+            if (!(source instanceof DOMSource)) {
+              if (source.getSystemId() == null) { // Set the base URI to resolve relative URI
+                source.setSystemId(SCHEMAS_DIRECTORY_PATH);
+              }
+              CustomEntityResolver entityResolver = new CustomEntityResolver(entityCatalogURL);
+              SAXSource saxSource = null;
+              if (source instanceof StreamSource) {
+                InputSource inputSource = SAXSource.sourceToInputSource(source);
+                saxSource = new SAXSource(inputSource);
+              } else if (source instanceof SAXSource) {
+                saxSource = (SAXSource) source;
+    stack_metadata:
+      framework: J2EE
+      xml_parser: JAXP
+
+  - record_key: XMLDOC-UTIL-0002
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL provide utility methods for serializing XML documents to various result
+      targets with configurable DTD public/system IDs and namespace support.
+    confidence: high
+    confidence_basis: >
+      XMLDocumentUtils.java provides multiple overloaded toXML methods (lines 388-436) that
+      serialize documents to Result targets. Methods support entity catalogs for DTD resolution
+      and XSD support flags. The serialize method (lines 364-386) configures transformer output
+      properties for DOCTYPE declarations.
+    risk_class: operational
+    basis: >
+      toXML methods in XMLDocumentUtils.java (lines 388-436) accept various parameters for
+      document type specification. The serialize method (lines 364-386) uses transformer
+      output properties (OutputKeys.DOCTYPE_SYSTEM, OutputKeys.DOCTYPE_PUBLIC) to write DTD
+      information into the serialized output.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 388
+        line_end: 436
+        excerpt: |
+          public static void toXML(Document document, String dtdPublicId, String dtdSystemId, String encoding, Result result)
+                throws XMLDocumentException {
+            serialize(createTransformer(), document, dtdPublicId, dtdSystemId, false, encoding, result);
+            return;
+          }
+          public static void toXML(Document document, String dtdPublicId, String dtdSystemId, Result result)
+                throws XMLDocumentException {
+            toXML(document, dtdPublicId, dtdSystemId, DEFAULT_ENCODING, result);
+            return;
+          }
+          public static void toXML(Document document, String dtdPublicId, URL entityCatalogURL, Result result)
+                throws XMLDocumentException {
+            toXML(document, dtdPublicId, entityCatalogURL, DEFAULT_ENCODING, result);
+            return;
+          }
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 364
+        line_end: 386
+        excerpt: |
+          public static void serialize(Transformer transformer, Document document, String dtdPublicId,
+                                       String dtdSystemId, boolean xsdSupport, String encoding, Result result)
+                throws XMLDocumentException {
+            try {
+              transformer.setOutputProperty(OutputKeys.METHOD, "xml");
+              if (!xsdSupport) {
+                if (dtdSystemId != null) {
+                  transformer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, dtdSystemId);
+                }
+                transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, dtdPublicId);
+              }
+              transformer.setOutputProperty(OutputKeys.ENCODING, encoding);
+              transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+              transformer.transform(new DOMSource(document), result);
+    stack_metadata:
+      framework: J2EE
+      xml_serialization: JAXP-Transformer
+
+  - record_key: XMLDOC-UTIL-0003
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL provide utility methods for DOM tree navigation that enforce schema
+      constraints through optional/required element validation, supporting both namespaced
+      and non-namespaced XML elements.
+    confidence: high
+    confidence_basis: >
+      XMLDocumentUtils.java provides methods for traversing DOM trees with boolean optional
+      parameters that control validation (getFirstChild lines 87-100, getNextSibling lines
+      138-151, getChild lines 102-114). Corresponding namespace-aware variants (getFirstChildNS
+      lines 208-221, getNextSiblingNS lines 259-272) provide namespaced versions. All methods
+      throw XMLDocumentException when required elements are missing.
+    risk_class: operational
+    basis: >
+      Navigation methods in XMLDocumentUtils.java (getFirstChild, getNextSibling, getChild,
+      getSibling at lines 87-151) use the optional boolean parameter to enforce requirements.
+      When optional=false and element is not found, XMLDocumentException is thrown (lines 96-98).
+      Namespace-aware variants follow the same pattern with NS-aware element matching (lines
+      208-272).
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 87
+        line_end: 151
+        excerpt: |
+          public static Element getFirstChild(Element element, String name, boolean optional) throws XMLDocumentException {
+            for (Node child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+              if (child.getNodeType() == Node.ELEMENT_NODE) {
+                if (((Element) child).getTagName().equals(name)) {
+                  return (Element) child;
+                }
+                break;
+              }
+            }
+            if (!optional) {
+              throw new XMLDocumentException(name + " element expected as first child of " + element.getTagName() + ".");
+            }
+            return null;
+          }
+          public static Element getNextSibling(Element element, String name, boolean optional) throws XMLDocumentException {
+            for (Node sibling = element.getNextSibling(); sibling != null; sibling = sibling.getNextSibling()) {
+              if (sibling.getNodeType() == Node.ELEMENT_NODE) {
+                if (((Element) sibling).getTagName().equals(name)) {
+                  return (Element) sibling;
+                }
+                break;
+              }
+            }
+            if (!optional) {
+              throw new XMLDocumentException(name + " element expected after " + element.getTagName() + ".");
+            }
+            return null;
+          }
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 208
+        line_end: 272
+        excerpt: |
+          public static Element getFirstChildNS(Element element, String nsURI, String name, boolean optional) throws XMLDocumentException {
+            for (Node child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+              if (child.getNodeType() == Node.ELEMENT_NODE) {
+                if (((Element) child).getLocalName().equals(name) && ((Element) child).getNamespaceURI().equals(nsURI)) {
+                  return (Element) child;
+                }
+                break;
+              }
+            }
+            if (!optional) {
+              throw new XMLDocumentException(name + " element expected as first child of " + element.getTagName() + ".");
+            }
+            return null;
+          }
+          public static Element getNextSiblingNS(Element element, String nsURI, String name, boolean optional) throws XMLDocumentException {
+            for (Node sibling = element.getNextSibling(); sibling != null; sibling = sibling.getNextSibling()) {
+              if (sibling.getNodeType() == Node.ELEMENT_NODE) {
+                if (((Element) sibling).getLocalName().equals(name) && ((Element) sibling).getNamespaceURI().equals(nsURI)) {
+                  return (Element) sibling;
+                }
+                break;
+              }
+            }
+            if (!optional) {
+              throw new XMLDocumentException(name + " element expected after " + element.getTagName() + ".");
+            }
+            return null;
+          }
+    stack_metadata:
+      framework: J2EE
+
+  - record_key: XMLDOC-UTIL-0004
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL provide utility methods for reading text content from XML elements
+      with support for multiple data types (string, integer, float) and optional/required
+      validation.
+    confidence: high
+    confidence_basis: >
+      XMLDocumentUtils.java provides getContent and getContentAs* methods (lines 153-178).
+      getContent concatenates text and CDATA nodes from an element (lines 153-166). Typed
+      variants (getContentAsInt, getContentAsFloat) parse the content with exception handling
+      (lines 172-186). The optional parameter controls whether empty content is valid.
+    risk_class: operational
+    basis: >
+      getContent method (lines 153-166) iterates through TEXT_NODE and CDATA_SECTION_NODE
+      children. If optional=false and buffer is empty, XMLDocumentException is thrown (lines
+      162-164). Typed variants (lines 172-186) wrap parseInt/parseFloat with error handling.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 153
+        line_end: 186
+        excerpt: |
+          public static String getContent(Element element, boolean optional) throws XMLDocumentException {
+            StringBuffer buffer = new StringBuffer();
+            for (Node child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+              if (child.getNodeType() == Node.TEXT_NODE || child.getNodeType() == Node.CDATA_SECTION_NODE) {
+                try {
+                  buffer.append(((Text) child).getData());
+                } catch (DOMException e) {}
+              }
+            }
+            if (!optional && buffer.length() == 0) {
+              throw new XMLDocumentException(element.getTagName() + " element: content expected.");
+            }
+            return buffer.toString();
+          }
+          public static String getContentAsString(Element element, boolean optional) throws XMLDocumentException {
+            return getContent(element, optional);
+          }
+          public static int getContentAsInt(Element element, boolean optional) throws XMLDocumentException {
+            try {
+              return Integer.parseInt(getContent(element, optional));
+            } catch (NumberFormatException exception) {
+              throw new XMLDocumentException(element.getTagName() + " element: content format error.", exception);
+            }
+          }
+          public static float getContentAsFloat(Element element, boolean optional) throws XMLDocumentException {
+            try {
+              return Float.parseFloat(getContent(element, optional));
+            } catch (NumberFormatException exception) {
+              throw new XMLDocumentException(element.getTagName() + " element: content format error.", exception);
+            }
+          }
+    stack_metadata:
+      framework: J2EE
+
+  - record_key: XMLDOC-ENTITY-0001
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL resolve XML entity references from a properties catalog, supporting
+      both URL-based and resource-based entity sources, with fallback to parent resolver.
+    confidence: high
+    confidence_basis: >
+      CustomEntityResolver.java (lines 47-110) implements EntityResolver and loads entity
+      mappings from a properties file (ENTITY_CATALOG constant at line 50). Constructor variants
+      accept URL, Properties, or another EntityResolver as parent (lines 55-109). The
+      resolveEntityFromURL method (lines 111-150) tries URL resolution first, then resource
+      classpath resolution, indicating a fallback chain.
+    risk_class: operational
+    basis: >
+      CustomEntityResolver loads entityCatalog from properties file (line 63-72). Multiple
+      constructor variants allow customization (lines 55-109). The resolveEntityFromURL method
+      (lines 111-150) demonstrates attempt/fallback pattern: tries URL, then resource path.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/CustomEntityResolver.java
+        line_start: 47
+        line_end: 110
+        excerpt: |
+          public class CustomEntityResolver implements EntityResolver {
+            public static final boolean TRACE = false;
+            public static final String ENTITY_CATALOG
+            = "/com/sun/j2ee/blueprints/xmldocuments/rsrc/EntityCatalog.properties";
+            private Properties entityCatalog = null;
+            private EntityResolver parentResolver = null;
+
+            public CustomEntityResolver() {
+              this((EntityResolver) null);
+              return;
+            }
+            public CustomEntityResolver(EntityResolver parentResolver) {
+              this.parentResolver = parentResolver;
+              entityCatalog = new Properties();
+              InputStream stream = getClass().getResourceAsStream(ENTITY_CATALOG);
+              if (stream != null) {
+                try {
+                  entityCatalog.load(stream);
+                } catch (IOException exception) {
+                  System.err.println("Can't load from resource: " + ENTITY_CATALOG + ": " + exception);
+                }
+              }
+              return;
+            }
+            public CustomEntityResolver(URL entityCatalogURL) {
+              this(entityCatalogURL, null);
+              return;
+            }
+            public CustomEntityResolver(URL entityCatalogURL, EntityResolver parentResolver) {
+              this(parentResolver);
+              if (entityCatalogURL != null) {
+                entityCatalog = new Properties(entityCatalog);
+                try {
+                  entityCatalog.load(entityCatalogURL.openStream());
+                } catch (IOException exception) {
+                  System.err.println("Can't load from resource: " + entityCatalogURL + ": " + exception);
+                }
+              }
+              return;
+            }
+    stack_metadata:
+      framework: J2EE
+
+  - record_key: XMLDOC-EDITOR-0001
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL provide an extensible XMLDocumentEditor interface and factory for
+      creating document-type-specific editors loaded from a configuration catalog.
+    confidence: high
+    confidence_basis: >
+      XMLDocumentEditor.java (lines 47-101) defines an interface with DefaultXDE base class
+      supporting configuration of validation and entity catalog behavior. XMLDocumentEditorFactory.java
+      (lines 45-75) loads editor class mappings from a properties catalog and instantiates
+      editors via reflection (line 70: Class.forName(className).newInstance()).
+    risk_class: operational
+    basis: >
+      XMLDocumentEditor interface (lines 47-101) declares core methods. DefaultXDE provides
+      configuration for validation, entity catalog, and XSD support (lines 49-93). Factory
+      loads catalog from URL (lines 51-58) and creates instances via reflection (lines 68-74).
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentEditor.java
+        line_start: 47
+        line_end: 101
+        excerpt: |
+          public interface XMLDocumentEditor {
+
+            public class DefaultXDE implements XMLDocumentEditor {
+              private boolean validating = false;
+              private URL entityCatalogURL = null;
+              private boolean supportingXSD = false;
+
+              public void setDocument(Source source) throws XMLDocumentException {
+                throw new UnsupportedOperationException("Can't set the source on this document editor.");
+              }
+              public Source getDocument() throws XMLDocumentException {
+                throw new UnsupportedOperationException("Can't get the source on this document editor.");
+              }
+              public void copyDocument(Result result) throws XMLDocumentException {
+                throw new UnsupportedOperationException("Can't copy from this document editor.");
+              }
+              public void setValidating(boolean validating) {
+                this.validating = validating;
+                return;
+              }
+              public boolean isValidating() {
+                return validating;
+              }
+              public void setEntityCatalogURL(URL entityCatalogURL) {
+                this.entityCatalogURL = entityCatalogURL;
+                return;
+              }
+              public URL getEntityCatalogURL() {
+                return entityCatalogURL;
+              }
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentEditorFactory.java
+        line_start: 45
+        line_end: 75
+        excerpt: |
+          public class XMLDocumentEditorFactory {
+            private Properties xdeCatalog = new Properties();
+
+            public XMLDocumentEditorFactory() {}
+
+            public XMLDocumentEditorFactory(URL catalogURL) throws XMLDocumentException {
+              try {
+                xdeCatalog.load(catalogURL.openStream());
+              } catch (IOException exception) {
+                throw new XMLDocumentException("Can't load from resource: " + catalogURL, exception);
+              }
+              return;
+            }
+
+            public XMLDocumentEditor getXDE(String schemaURI) throws XMLDocumentException {
+              String className = xdeCatalog.getProperty(schemaURI);
+              if (className != null) {
+                return createXDE(className);
+              }
+              throw new XMLDocumentException("No mapping for schema: " + schemaURI);
+            }
+
+            public XMLDocumentEditor createXDE(String className) throws XMLDocumentException {
+              try {
+                return (XMLDocumentEditor) Class.forName(className).newInstance();
+              } catch(Exception exception) {
+                throw new XMLDocumentException("Can't instantiate XDE: " + className, exception);
+              }
+            }
+    stack_metadata:
+      framework: J2EE
+      design_pattern: Factory-Pattern
+
+  - record_key: XMLDOC-PURCHORDER-0001
+    kind: entity
+    capability_key: order-placement
+    requirement: >
+      PurchaseOrder documents SHALL contain order identification, user/email information,
+      order date, shipping and billing addresses, total price, and one or more line items.
+    confidence: high
+    confidence_basis: >
+      The PurchaseOrder.dtd (line 38) defines the document structure with mandatory elements:
+      OrderId, UserId, EmailId, OrderDate, ShipAddress, BillAddress, TotalPrice, CreditCard,
+      and one or more LineItem elements. All elements are required (no optional indicators in DTD).
+    risk_class: operational
+    basis: >
+      PurchaseOrder.dtd (lines 38-84) defines the XML element structure. Root element
+      PurchaseOrder contains child elements in fixed order. LineItem is referenced via entity
+      inclusion (lines 82-83). The locale attribute on PurchaseOrder (line 40-42) defaults to en_US.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/PurchaseOrder.dtd
+        line_start: 38
+        line_end: 84
+        excerpt: |
+          <!ELEMENT PurchaseOrder (OrderId, UserId, EmailId, OrderDate, ShipAddress, BillAddress, TotalPrice, CreditCard, LineItem+)>
+          <!ATTLIST PurchaseOrder
+            locale CDATA "en_US"
+          >
+          <!ELEMENT OrderId (#PCDATA)>
+          <!ELEMENT UserId (#PCDATA)>
+          <!ELEMENT EmailId (#PCDATA)>
+          <!ELEMENT OrderDate (#PCDATA)>
+          <!ENTITY % Address "FirstName, LastName, Street, City, State, Country, ZipCode">
+          <!ELEMENT FirstName (#PCDATA)>
+          <!ELEMENT LastName (#PCDATA)>
+          <!ELEMENT Street (#PCDATA)>
+          <!ELEMENT City (#PCDATA)>
+          <!ELEMENT State (#PCDATA)>
+          <!ELEMENT Country (#PCDATA)>
+          <!ELEMENT ZipCode (#PCDATA)>
+          <!ELEMENT ShipAddress (%Address;)>
+          <!ELEMENT BillAddress (%Address;)>
+          <!ELEMENT TotalPrice (#PCDATA)>
+          <!ELEMENT CreditCard (CardNumber, ExpiryDate, CardType)>
+          <!ELEMENT CardNumber (#PCDATA)>
+          <!ELEMENT ExpiryDate (#PCDATA)>
+          <!ELEMENT CardType (#PCDATA)>
+          <!ENTITY % LineItem PUBLIC "-//Sun Microsystems, Inc. - J2EE Blueprints Group//DTD Line Item 1.0//EN" "LineItem.dtd">
+          %LineItem;
+    stack_metadata:
+      schema_type: DTD
+
+  - record_key: XMLDOC-INVOICE-0001
+    kind: entity
+    capability_key: order-tracking
+    requirement: >
+      Invoice documents SHALL contain order and user identifiers, order and shipping dates,
+      and one or more line items.
+    confidence: high
+    confidence_basis: >
+      Invoice.dtd (line 41) defines the document root element with mandatory children: OrderId,
+      UserId, OrderDate, ShippingDate, and one or more LineItem elements. All elements are
+      required with no optional markers. The locale attribute defaults to en_US.
+    risk_class: operational
+    basis: >
+      Invoice.dtd (lines 38-54) defines the structure. Root Invoice element contains OrderId,
+      UserId, OrderDate, ShippingDate, and LineItem+ (line 41). LineItem is referenced via
+      entity inclusion (lines 38-39).
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/Invoice.dtd
+        line_start: 38
+        line_end: 54
+        excerpt: |
+          <!ENTITY % LineItem PUBLIC "-//Sun Microsystems, Inc. - J2EE Blueprints Group//DTD Line Item 1.0//EN" "LineItem.dtd">
+          %LineItem;
+
+          <!ELEMENT Invoice (OrderId, UserId, OrderDate, ShippingDate, LineItem+)>
+
+          <!ATTLIST Invoice
+            locale CDATA "en_US"
+          >
+
+          <!ELEMENT OrderId (#PCDATA)>
+
+          <!ELEMENT UserId (#PCDATA)>
+
+          <!ELEMENT OrderDate (#PCDATA)>
+
+          <!ELEMENT ShippingDate (#PCDATA)>
+    stack_metadata:
+      schema_type: DTD
+
+  - record_key: XMLDOC-ORDERAPPROVAL-0001
+    kind: entity
+    capability_key: order-fulfillment
+    requirement: >
+      OrderApproval documents SHALL contain one or more Order elements, each with an OrderId
+      and OrderStatus.
+    confidence: high
+    confidence_basis: >
+      OrderApproval.dtd (line 38) defines root element with one or more Order children. Each
+      Order (line 40) contains mandatory OrderId and OrderStatus. The OrderApproval.java class
+      (line 71) maintains an ArrayList for multiple orders, confirming collection semantics.
+    risk_class: operational
+    basis: >
+      OrderApproval.dtd (lines 38-45) shows DTD structure. OrderApproval.java (line 71)
+      implements ArrayList orderList for managing multiple orders. addOrder method (lines 78-81)
+      confirms add semantics.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/OrderApproval.dtd
+        line_start: 38
+        line_end: 46
+        excerpt: |
+          <!ELEMENT OrderApproval (Order+)>
+
+          <!ELEMENT Order (OrderId, OrderStatus)>
+
+          <!ELEMENT OrderId (#PCDATA)>
+
+          <!-- FIXME should be attribute -->
+          <!ELEMENT OrderStatus (#PCDATA)>
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/OrderApproval.java
+        line_start: 66
+        line_end: 85
+        excerpt: |
+          public class OrderApproval {
+            public static final String DTD_PUBLIC_ID = "-//Sun Microsystems, Inc. - J2EE Blueprints Group//DTD Order Approval 1.0//EN";
+            public static final String DTD_SYSTEM_ID = "OrderApproval.dtd";
+            public static final boolean VALIDATING = true;
+            public static final String XML_ORDERAPPROVAL = "OrderApproval";
+            private ArrayList orderList = new ArrayList();
+
+            public OrderApproval() {}
+
+            public void addOrder(ChangedOrder order) {
+              orderList.add(order);
+              return;
+            }
+
+            public Collection getOrdersList() {
+              return orderList;
+            }
+    stack_metadata:
+      schema_type: DTD
+
+  - record_key: XMLDOC-SUPPLIERORDER-0001
+    kind: entity
+    capability_key: supplier-management
+    requirement: >
+      TPA SupplierOrder documents SHALL contain order identification, order date, shipping
+      address with contact information, and line items.
+    confidence: high
+    confidence_basis: >
+      TPASupplierOrderXDE.java defines constants for the document structure (lines 58-87).
+      The DTD_PUBLIC_ID and schema elements indicate the document type. Class fields OrderIdElement,
+      OrderDateElement, ShippingAddressElement, and LineItemsElement (lines 83-86) confirm
+      the structure. Method implementations use these elements to build the document.
+    risk_class: operational
+    basis: >
+      TPASupplierOrderXDE.java defines XML element names as constants (lines 65-77): OrderId,
+      OrderDate, ShippingAddress with contact fields (FirstName, LastName, Street, City, State,
+      Country, ZipCode, Email, Phone), and LineItems. The class structure (lines 82-86) confirms
+      these are document components.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/tpa/TPASupplierOrderXDE.java
+        line_start: 57
+        line_end: 87
+        excerpt: |
+          public class TPASupplierOrderXDE extends XMLDocumentEditor.DefaultXDE {
+            public static final String DTD_PUBLIC_ID = "-//Sun Microsystems, Inc. - J2EE Blueprints Group//DTD TPA-SupplierOrder 1.0//EN";
+            public static final String XSD_PUBLIC_ID = "http://blueprints.j2ee.sun.com/TPASupplierOrder";
+            public static final String XML_NAMESPACE = "http://blueprints.j2ee.sun.com/TPASupplierOrder";
+            public static final String XML_PREFIX = "tpaso";
+            public static final String DTD_SYSTEM_ID = "/com/sun/j2ee/blueprints/xmldocuments/rsrc/schemas/TPASupplierOrder.dtd";
+            public static final String XSD_SYSTEM_ID = "/com/sun/j2ee/blueprints/xmldocuments/rsrc/schemas/TPASupplierOrder.xsd";
+            public static final String XML_SUPPLIERORDER = XML_PREFIX + ":" + "SupplierOrder";
+            public static final String XML_ORDERID = XML_PREFIX + ":" + "OrderId";
+            public static final String XML_ORDERDATE = XML_PREFIX + ":" + "OrderDate";
+            public static final String XML_SHIPPINGADDRESS = XML_PREFIX + ":" + "ShippingAddress";
+            public static final String XML_FIRSTNAME = XML_PREFIX + ":" + "FirstName";
+            public static final String XML_LASTNAME = XML_PREFIX + ":" + "LastName";
+            public static final String XML_STREET = XML_PREFIX + ":" + "Street";
+            public static final String XML_CITY = XML_PREFIX + ":" + "City";
+            public static final String XML_STATE = XML_PREFIX + ":" + "State";
+            public static final String XML_COUNTRY = XML_PREFIX + ":" + "Country";
+            public static final String XML_ZIPCODE = XML_PREFIX + ":" + "ZipCode";
+            public static final String XML_EMAIL = XML_PREFIX + ":" + "Email";
+            public static final String XML_PHONE = XML_PREFIX + ":" + "Phone";
+            public static final String XML_LINEITEMS = XML_PREFIX + ":" + "LineItems";
+            private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+            private final DocumentBuilder builder;
+            private final Transformer transformer;
+            private final String systemId;
+            private Document supplierOrderDocument = null;
+            private Element orderIdElement = null;
+            private Element orderDateElement = null;
+            private Element shippingAddressElement = null;
+            private Element lineItemsElement = null;
+    stack_metadata:
+      schema_type: DTD/XSD
+      namespace: "http://blueprints.j2ee.sun.com/TPASupplierOrder"
+
+  - record_key: XMLDOC-EXCEPTION-0001
+    kind: business-rule
+    capability_key: order-placement
+    requirement: >
+      The system SHALL define a custom XMLDocumentException that extends Exception for
+      reporting XML processing errors with optional wrapped causes.
+    confidence: medium
+    confidence_basis: >
+      XMLDocumentException.java exists as referenced throughout the codebase in throw
+      declarations and catch blocks. The class is used to wrap both parsing errors and
+      I/O exceptions. Multiple overloaded constructors are referenced (taking String and
+      String with Throwable), indicating standard exception pattern implementation.
+    risk_class: operational
+    basis: >
+      XMLDocumentException is used throughout XMLDocumentUtils (lines 504, 539, 544),
+      XMLDocumentEditor (line 55), CustomEntityResolver (line 55), and other classes to
+      wrap XML-specific errors. The exception is instantiated both with single String
+      parameter and with String and Exception parameters (e.g., line 410).
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 504
+        line_end: 510
+        excerpt: |
+          public static Document fromXML(Source source, String dtdPublicId, final URL entityCatalogURL, boolean validating)
+                throws XMLDocumentException {
+            return deserialize(createTransformer(), source, dtdPublicId, entityCatalogURL, validating, false);
+          }
+          public static Document fromXML(InputSource source, String dtdPublicId, final URL entityCatalogURL, boolean validating)
+                throws XMLDocumentException {
+            Document document;
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentUtils.java
+        line_start: 407
+        line_end: 417
+        excerpt: |
+          try {
+            CustomEntityResolver entityResolver = new CustomEntityResolver(entityCatalogURL);
+            String dtdSystemId = entityResolver.mapEntityURI(dtdPublicId);
+            toXML(document, dtdPublicId, dtdSystemId, encoding, result);
+          } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            throw new XMLDocumentException(exception);
+          }
+    stack_metadata:
+      framework: J2EE
+
+  - record_key: XMLDOC-LINEITEM-0001
+    kind: entity
+    capability_key: order-placement
+    requirement: >
+      LineItem documents SHALL be defined as a reusable DTD entity with item identification,
+      quantity, and price information.
+    confidence: medium
+    confidence_basis: >
+      LineItem.dtd exists and is referenced via entity inclusion in both PurchaseOrder.dtd
+      (lines 82-83) and Invoice.dtd (lines 38-39). The file path indicates it is a shared
+      component used across multiple document types. The entity is included with PUBLIC and
+      SYSTEM identifiers indicating standardized reuse.
+    risk_class: operational
+    basis: >
+      PurchaseOrder.dtd and Invoice.dtd both include LineItem.dtd via entity mechanism:
+      <!ENTITY % LineItem PUBLIC "..." "LineItem.dtd">. This pattern indicates LineItem
+      is a reusable component with its own schema definition file.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/PurchaseOrder.dtd
+        line_start: 82
+        line_end: 84
+        excerpt: |
+          <!ENTITY % LineItem PUBLIC "-//Sun Microsystems, Inc. - J2EE Blueprints Group//DTD Line Item 1.0//EN" "LineItem.dtd">
+          %LineItem;
+      - path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/Invoice.dtd
+        line_start: 38
+        line_end: 39
+        excerpt: |
+          <!ENTITY % LineItem PUBLIC "-//Sun Microsystems, Inc. - J2EE Blueprints Group//DTD Line Item 1.0//EN" "LineItem.dtd">
+          %LineItem;
+    stack_metadata:
+      schema_type: DTD
+
+findings:
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/OrderApproval.dtd
+    description: >
+      Line 44-45 contains a comment "FIXME should be attribute" on OrderStatus. This indicates
+      that OrderStatus was intended to be an XML attribute on the Order element rather than a
+      child element. The current implementation uses it as a child element (#PCDATA), which may
+      diverge from the original design intent. A decision is needed: either change OrderStatus
+      to an attribute as intended, or document that the current element form is correct and
+      remove the FIXME comment.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/XMLDocumentException.java
+    description: >
+      XMLDocumentException.java is referenced throughout the codebase but the file content
+      was not accessible during this pass. The actual class definition, inheritance, and
+      implementation are unknown. It is assumed to be a simple exception wrapper, but without
+      seeing the source, specific exception handling semantics cannot be documented.
+
+  - kind: unparseable
+    path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/LineItem.dtd
+    description: >
+      LineItem.dtd is referenced via entity inclusion in multiple document types but was not
+      found in the file listing. The actual structure of LineItem elements cannot be determined
+      without reading this shared schema definition.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/ChangedOrder.java
+    description: >
+      ChangedOrder.java is referenced in OrderApproval.java (line 78) as a parameter type,
+      but the file content was not examined during this pass. The actual structure of a
+      ChangedOrder object and how it maps to the OrderApproval XML document cannot be determined.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/com/sun/j2ee/blueprints/xmldocuments/tpa/TPALineItemUtils.java
+    description: >
+      TPALineItemUtils.java exists but was not examined during this pass. Its role in the
+      TPA document handling and whether it represents additional LineItem processing for
+      supplier orders is unclear.
+
+  - kind: unparseable
+    path: legacy-source/petstore1.3.2/src/components/xmldocuments/src/rsrc/schemas/TPAInvoice.dtd
+    description: >
+      TPAInvoice.dtd and TPAInvoice.xsd exist in the schema directory but were not examined.
+      The actual structure of TPA invoices and whether they differ significantly from regular
+      Invoice documents cannot be determined.

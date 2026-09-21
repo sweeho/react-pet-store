@@ -1,0 +1,11 @@
+capability_key,name,summary
+catalog-browsing,Product Catalog,Browse categories and products; search and filter items by type and price
+shopping-cart,Shopping Cart,Add items to cart; update quantities; remove items; persist cart across sessions
+order-placement,Order Placement,Create purchase orders from cart; collect customer, billing, and shipping information
+payment-processing,Payment Processing,Validate credit card information; store and reference credit card data for orders
+user-accounts,User Accounts,Customer registration; sign-on authentication; profile management; address/contact info storage
+order-fulfillment,Order Fulfillment,Async order approval workflow; status tracking; supplier purchase order generation
+order-tracking,Order Status Tracking,Track order through fulfillment pipeline; query orders by status; retrieve order history
+supplier-management,Supplier Management,Manage supplier relationships; send purchase orders to suppliers; receive fulfillment updates
+admin-operations,Admin Operations,Admin portal for approving orders; viewing order status; managing fulfillment workflows
+notifications,Customer Notifications,Send order confirmation emails; send order approval status emails; email notifications on order events

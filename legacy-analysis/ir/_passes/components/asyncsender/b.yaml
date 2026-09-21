@@ -1,0 +1,387 @@
+records:
+  # Integration: Asynchronous JMS Message Sending
+  - record_key: ASYNCSENDER-INTEGRATION-0001
+    kind: integration
+    capability_key: notifications
+    requirement: >
+      The system SHALL send text messages asynchronously via a JMS Queue.
+      Each invocation of sendAMessage(String msg) SHALL create a new QueueConnection,
+      establish a QueueSession with transacted mode enabled, send the message as a
+      TextMessage, and close the connection in a finally block.
+    confidence: high
+    confidence_basis: >
+      The sendAMessage method implementation is explicit in AsyncSenderEJB.java
+      (lines 68-90) with clear steps: obtain connection factory and queue from
+      ejbCreate (lines 58-66), create connection, create session with (true, 0),
+      create TextMessage, set text, send, and close. The ejb-jar.xml declares
+      these as resource references (lines 58-67), confirming this is the designed
+      integration contract.
+    risk_class: operational
+    basis: >
+      AsyncSenderEJB.sendAMessage() at lines 68-90 implements the full send cycle.
+      ServiceLocator.getQueueConnectionFactory() and getQueue() are called in ejbCreate
+      (lines 60-62). QueueConnection.createQueueSession(true, 0) creates a transacted
+      session (line 75). TextMessage is created, text set, and sent (lines 77-79).
+      Connection is closed in finally block (lines 84-88). ejb-jar.xml resource-ref
+      and resource-env-ref (lines 58-67) declare the external dependencies.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+        line_start: 68
+        line_end: 90
+        excerpt: |
+          public void sendAMessage(String msg)  {
+            QueueSession session = null;
+            QueueConnection qConnect = null;
+            QueueSender qSender = null;
+
+            try {
+              qConnect = qFactory.createQueueConnection();
+              session = qConnect.createQueueSession(true,0);
+              qSender = session.createSender(q);
+              TextMessage jmsMsg = session.createTextMessage();
+              jmsMsg.setText(msg);
+              qSender.send(jmsMsg);
+            }catch  (Exception e) {
+              e.printStackTrace();
+              throw new EJBException("askMDBToSendAMessage: Error!",e);
+            } finally {
+              try {
+                        if( qConnect != null ) {
+                qConnect.close();
+                        }
+              } catch(Exception e) {}
+                }
+          }
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/ejb-jar.xml
+        line_start: 58
+        line_end: 67
+        excerpt: |
+          <resource-ref>
+            <res-ref-name>jms/QueueConnectionFactory</res-ref-name>
+            <res-type>javax.jms.QueueConnectionFactory</res-type>
+            <res-auth>Container</res-auth>
+            <res-sharing-scope>Shareable</res-sharing-scope>
+          </resource-ref>
+          <resource-env-ref>
+            <resource-env-ref-name>jms/AsyncSenderQueue</resource-env-ref-name>
+            <resource-env-ref-type>javax.jms.Queue</resource-env-ref-type>
+          </resource-env-ref>
+    stack_metadata:
+      ejb.bean: AsyncSenderEJB
+      ejb.transaction: Required
+      jms.queue: AsyncSenderQueue
+      jms.mode: transacted
+
+  # Architecture: Stateless Session EJB with Local Access
+  - record_key: ASYNCSENDER-ARCH-0001
+    kind: requirement
+    capability_key: notifications
+    requirement: >
+      AsyncSender SHALL be implemented as a Stateless Session EJB with
+      Container-managed transactions. The bean SHALL expose a local-only interface
+      (AsyncSender, AsyncSenderLocalHome) accessible only within the same
+      application server instance. The bean SHALL use the Caller Identity
+      security context and permit unchecked access to the sendAMessage method.
+    confidence: high
+    confidence_basis: >
+      The ejb-jar.xml declaratively specifies session-type "Stateless" (line 52),
+      transaction-type "Container" (line 53), and defines only local-home and
+      local interfaces (lines 49-50), not remote interfaces. The assembly-descriptor
+      method-permission for sendAMessage (lines 107-114) is marked unchecked, and
+      security-identity specifies use-caller-identity (line 56). This architecture
+      is stated declaratively, not inferred from code.
+    risk_class: operational
+    basis: >
+      ejb-jar.xml session bean declaration (lines 46-68) specifies Stateless,
+      Container-managed transactions, and local interfaces only. Assembly-descriptor
+      (lines 70-133) declares unchecked method permissions for sendAMessage
+      (lines 107-114) and container-transaction Required (lines 122-132).
+      Security-identity at lines 54-56 specifies use-caller-identity.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/ejb-jar.xml
+        line_start: 46
+        line_end: 68
+        excerpt: |
+          <session>
+            <display-name>AsyncSenderJAR</display-name>
+            <ejb-name>AsyncSenderEJB</ejb-name>
+            <local-home>com.sun.j2ee.blueprints.asyncsender.ejb.AsyncSenderLocalHome</local-home>
+            <local>com.sun.j2ee.blueprints.asyncsender.ejb.AsyncSender</local>
+            <ejb-class>com.sun.j2ee.blueprints.asyncsender.ejb.AsyncSenderEJB</ejb-class>
+            <session-type>Stateless</session-type>
+            <transaction-type>Container</transaction-type>
+            <security-identity>
+              <description></description>
+              <use-caller-identity></use-caller-identity>
+            </security-identity>
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/ejb-jar.xml
+        line_start: 107
+        line_end: 114
+        excerpt: |
+          <method>
+            <ejb-name>AsyncSenderEJB</ejb-name>
+            <method-intf>Local</method-intf>
+            <method-name>sendAMessage</method-name>
+            <method-params>
+              <method-param>java.lang.String</method-param>
+            </method-params>
+          </method>
+    stack_metadata:
+      ejb.bean: AsyncSenderEJB
+      ejb.session_type: Stateless
+      ejb.transaction_type: Container
+      security.model: local-only
+      security.access: unchecked
+
+  # Lifecycle: Bean Initialization
+  - record_key: ASYNCSENDER-LIFECYCLE-0001
+    kind: requirement
+    capability_key: notifications
+    requirement: >
+      When the AsyncSenderEJB is created, the container SHALL invoke ejbCreate(),
+      which SHALL initialize the qFactory and q fields by obtaining the
+      QueueConnectionFactory and Queue via ServiceLocator. If ServiceLocatorException
+      occurs during initialization, the exception SHALL be wrapped in an
+      EJBException and thrown to the caller.
+    confidence: high
+    confidence_basis: >
+      The ejbCreate() method is explicitly implemented in AsyncSenderEJB.java
+      (lines 58-66) and is the designated EJB lifecycle method called by the
+      container on bean instantiation. The code directly calls ServiceLocator
+      to obtain resources and catches ServiceLocatorException, wrapping it in
+      EJBException. This is standard EJB lifecycle practice, not implementation
+      detail.
+    risk_class: operational
+    basis: >
+      AsyncSenderEJB.ejbCreate() (lines 58-66) is the lifecycle method invoked
+      by the container. It creates a ServiceLocator instance and calls
+      getQueueConnectionFactory(JNDINames.QUEUE_CONNECTION_FACTORY) and
+      getQueue(JNDINames.ASYNC_SENDER_QUEUE) to populate instance fields.
+      ServiceLocatorException is caught and wrapped in EJBException.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+        line_start: 58
+        line_end: 66
+        excerpt: |
+          public void ejbCreate( ) throws CreateException {
+                try {
+              ServiceLocator serviceLocator = new ServiceLocator();
+              qFactory = serviceLocator.getQueueConnectionFactory(JNDINames.QUEUE_CONNECTION_FACTORY);
+              q = serviceLocator.getQueue(JNDINames.ASYNC_SENDER_QUEUE);
+                } catch (ServiceLocatorException sle) {
+              throw new EJBException("AsyncSenderEJB.ejbCreate failed", sle);
+                }
+          }
+    stack_metadata:
+      ejb.bean: AsyncSenderEJB
+      ejb.lifecycle: ejbCreate
+
+  # Business Rule: Exception Handling and Error Reporting
+  - record_key: ASYNCSENDER-ERRRULE-0001
+    kind: business-rule
+    capability_key: notifications
+    requirement: >
+      When sendAMessage(String msg) encounters any exception during message
+      creation or sending, the system SHALL call printStackTrace() to log the
+      exception, then throw an EJBException wrapping the original exception.
+      The connection, if created, SHALL be closed in a finally block regardless
+      of success or failure, and any exception from close() SHALL be silently
+      discarded.
+    confidence: medium
+    confidence_basis: >
+      The code explicitly implements this pattern in a try-catch-finally block
+      (lines 80-88). However, printStackTrace() is a development-style logging
+      mechanism, not a configured logging framework, so it is unclear whether
+      this is the intended production error handling or a placeholder. The error
+      message "askMDBToSendAMessage: Error!" appears to be hardcoded and does
+      not match the actual method name. The finally block silently catches and
+      discards close() exceptions without logging.
+    risk_class: operational
+    basis: >
+      AsyncSenderEJB.sendAMessage() lines 80-88 show a try-catch-finally pattern.
+      Line 81 calls e.printStackTrace(). Line 82 throws EJBException("askMDBToSendAMessage: Error!", e).
+      Lines 84-88 attempt to close the connection in finally, catching and silently
+      discarding any close() exceptions.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+        line_start: 80
+        line_end: 89
+        excerpt: |
+          }catch  (Exception e) {
+            e.printStackTrace();
+            throw new EJBException("askMDBToSendAMessage: Error!",e);
+          } finally {
+            try {
+                      if( qConnect != null ) {
+              qConnect.close();
+                      }
+            } catch(Exception e) {}
+              }
+    stack_metadata:
+      ejb.bean: AsyncSenderEJB
+      error.handling: try-catch-finally
+      error.logging: printStackTrace
+
+  # Business Rule: Queue Session Transaction Mode
+  - record_key: ASYNCSENDER-TXNMODE-0001
+    kind: business-rule
+    capability_key: notifications
+    requirement: >
+      When sendAMessage(String msg) creates a QueueSession, the session SHALL
+      be created with transacted mode enabled (first parameter true) and
+      acknowledgement mode 0 (second parameter 0, corresponding to AUTO_ACKNOWLEDGE).
+    confidence: low
+    confidence_basis: >
+      The code at line 75 creates QueueSession with hardcoded parameters (true, 0).
+      Neither value is configured externally or documented with comments. While the
+      first parameter (true) clearly enables transacted mode, the second parameter
+      (0) is a bare literal with no explanation. Mapping 0 to AUTO_ACKNOWLEDGE is
+      inferred from JMS API constants, not stated in code or configuration.
+    risk_class: operational
+    basis: >
+      AsyncSenderEJB.sendAMessage() line 75:
+      session = qConnect.createQueueSession(true,0);
+      The JMS API signature is createQueueSession(boolean transacted, int acknowledgeMode).
+      The hardcoded values (true, 0) indicate transacted=true and acknowledgeMode=0.
+      There is no configuration file, property, or comment explaining this choice.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+        line_start: 73
+        line_end: 79
+        excerpt: |
+          try {
+            qConnect = qFactory.createQueueConnection();
+            session = qConnect.createQueueSession(true,0);
+            qSender = session.createSender(q);
+            TextMessage jmsMsg = session.createTextMessage();
+            jmsMsg.setText(msg);
+            qSender.send(jmsMsg);
+    stack_metadata:
+      ejb.bean: AsyncSenderEJB
+      jms.transacted: true
+      jms.acknowledge_mode: 0
+
+  # Business Rule: Interface Contract
+  - record_key: ASYNCSENDER-INTERFACE-0001
+    kind: requirement
+    capability_key: notifications
+    requirement: >
+      The AsyncSender local interface SHALL declare a single public method
+      sendAMessage(String message) with no return value. Callers SHALL obtain
+      an AsyncSender reference via AsyncSenderLocalHome.create().
+    confidence: high
+    confidence_basis: >
+      The AsyncSender interface (AsyncSender.java lines 44-47) explicitly declares
+      sendAMessage(String message) as the only public method. AsyncSenderLocalHome
+      interface (AsyncSenderLocalHome.java lines 45-46) declares create() as the
+      factory method. These interfaces are the contract; they are the primary way
+      clients interact with the bean.
+    risk_class: operational
+    basis: >
+      AsyncSender.java lines 44-47 define the interface:
+        public interface AsyncSender extends EJBLocalObject {
+          public void sendAMessage(String message);
+        }
+      AsyncSenderLocalHome.java lines 45-46 define the home interface:
+        public interface AsyncSenderLocalHome extends EJBLocalHome {
+          public AsyncSender create() throws  CreateException;
+        }
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSender.java
+        line_start: 44
+        line_end: 47
+        excerpt: |
+          public interface AsyncSender extends EJBLocalObject {
+
+              public void sendAMessage(String message);
+          }
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderLocalHome.java
+        line_start: 45
+        line_end: 46
+        excerpt: |
+          public interface AsyncSenderLocalHome extends EJBLocalHome {
+              public AsyncSender create() throws  CreateException;
+          }
+    stack_metadata:
+      ejb.bean: AsyncSenderEJB
+      interface.type: local-only
+
+  # Resource Sharing: JMS Resource Sharing Policy
+  - record_key: ASYNCSENDER-RESOURCE-SHARING-0001
+    kind: requirement
+    capability_key: notifications
+    requirement: >
+      The JMS QueueConnectionFactory resource reference SHALL be configured
+      with res-sharing-scope "Shareable", allowing multiple bean instances or
+      concurrent sessions to share the same connection factory resource.
+      The Queue resource SHALL use Container-managed authentication.
+    confidence: high
+    confidence_basis: >
+      The ejb-jar.xml resource-ref (lines 58-62) explicitly declares
+      res-sharing-scope as "Shareable", and res-auth as "Container". These
+      declarative settings are the configuration contract and are enforced
+      by the container, not inferred from code.
+    risk_class: operational
+    basis: >
+      ejb-jar.xml lines 58-67 declare resource configuration:
+      - res-sharing-scope "Shareable" at line 62
+      - res-auth "Container" at line 61
+      These settings are part of the deployment descriptor and are enforced
+      by the EJB container.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/asyncsender/src/ejb-jar.xml
+        line_start: 58
+        line_end: 67
+        excerpt: |
+          <resource-ref>
+            <res-ref-name>jms/QueueConnectionFactory</res-ref-name>
+            <res-type>javax.jms.QueueConnectionFactory</res-type>
+            <res-auth>Container</res-auth>
+            <res-sharing-scope>Shareable</res-sharing-scope>
+          </resource-ref>
+          <resource-env-ref>
+            <resource-env-ref-name>jms/AsyncSenderQueue</resource-env-ref-name>
+            <resource-env-ref-type>javax.jms.Queue</resource-env-ref-type>
+          </resource-env-ref>
+    stack_metadata:
+      resource.sharing: Shareable
+      resource.auth: Container
+      resource.type: jms
+
+findings:
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+    description: >
+      The error message in line 82 is "askMDBToSendAMessage: Error!" but the
+      method name is sendAMessage(). The message text suggests it may have been
+      copied from another component or refactored without updating the error string.
+      This is a documentation inconsistency with no functional impact, but it
+      suggests the error message may not be the intended production error text.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+    description: >
+      Line 75 creates a QueueSession with hardcoded parameters (true, 0). The first
+      parameter (true) enables transacted mode, which is clear. The second parameter
+      (0) corresponds to AUTO_ACKNOWLEDGE in the JMS API, but this mapping is not
+      documented in comments or configuration. It is unresolved whether this mode was
+      chosen intentionally or whether other modes (e.g., CLIENT_ACKNOWLEDGE) should
+      be considered.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+    description: >
+      Lines 84-88 implement a finally block that silently catches and discards
+      exceptions from qConnect.close(). The intent is to ensure close() is always
+      attempted, but any cleanup errors are lost without logging. It is unresolved
+      whether this pattern is intentional (prioritizing close attempt over error
+      reporting) or whether close() failures should be logged.
+
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/asyncsender/src/com/sun/j2ee/blueprints/asyncsender/ejb/AsyncSenderEJB.java
+    description: >
+      Line 81 calls e.printStackTrace(), which is a development-style logging
+      mechanism. There is no integration with a formal logging framework (e.g.,
+      Log4j, java.util.logging) in the visible code. It is unclear whether
+      printStackTrace() is the intended production error handling or a placeholder
+      pending integration with an application-wide logging strategy.

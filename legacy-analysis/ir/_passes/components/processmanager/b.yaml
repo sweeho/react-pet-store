@@ -1,0 +1,327 @@
+records:
+  - record_key: order-fulfillment-wf-0001
+    kind: workflow
+    capability_key: order-fulfillment
+    requirement: >
+      The system SHALL track purchase orders through a fulfillment workflow with
+      the following state transitions: PENDING (initial) -> APPROVED -> SHIPPED_PART
+      (when part of order has shipped) -> COMPLETED (when entire order has shipped),
+      or PENDING -> DENIED (when order is rejected).
+    confidence: high
+    confidence_basis: >
+      The OrderStatusNames constant class explicitly documents the order states and
+      their sequence. The ProcessManagerEJB and ManagerEJB provide methods to
+      create and update status. The schema defines both orderId and status as
+      persistent CMP fields, and the declarative configuration enforces Container
+      transaction management on all state transitions, providing dual evidence
+      (schema + declarative configuration).
+    risk_class: operational
+    basis: >
+      OrderStatusNames.java defines five status constants: PENDING, APPROVED, DENIED,
+      SHIPPED_PART, and COMPLETED. The comments state the valid sequence. ProcessManagerEJB
+      methods createManager() starts with a status, updateStatus() changes it, and
+      getStatus() retrieves it. ManagerEJB is a CMP entity with abstract getters/setters
+      for orderId and status, persisted as CMP fields in ejb-jar.xml.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/ejb/OrderStatusNames.java
+        line_start: 44
+        line_end: 66
+        excerpt: |
+          * This class is the central location to store the names of the
+          * status that an order can be in.
+          * The states an order goes through are:
+          * pending->approved->shippedPart(shipped part of order)->completed(whole order shipped)  or
+          * pending->denied
+          ...
+          public static final String PENDING = "PENDING";
+          public static final String APPROVED = "APPROVED";
+          public static final String DENIED = "DENIED";
+          public static final String SHIPPED_PART = "SHIPPED_PART";
+          public static final String COMPLETED = "COMPLETED";
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/ejb/ProcessManagerEJB.java
+        line_start: 63
+        line_end: 76
+        excerpt: |
+          public void createManager(String orderId, String status) throws CreateException {
+            ManagerLocal manager = mlh.create(orderId, status);
+          }
+
+          public void updateStatus(String orderId, String status) throws FinderException {
+            ManagerLocal manager = mlh.findByPrimaryKey(orderId);
+            manager.setStatus(status);
+          }
+    stack_metadata:
+      ejb.bean: ProcessManagerEJB (stateless session), ManagerEJB (entity bean, CMP 2.x)
+      ejb.transaction: Required (container-managed)
+
+  - record_key: order-fulfillment-wf-0002
+    kind: requirement
+    capability_key: order-fulfillment
+    requirement: >
+      When a new order is placed, the system SHALL create a Manager entity to track
+      the order through the fulfillment workflow, initialized with the PENDING status.
+    confidence: high
+    confidence_basis: >
+      The ProcessManagerEJB.createManager() method is explicitly documented as
+      "Business method used for when new purchase orders are received and want to
+      start the workflow process to fulfill the order." The method creates a Manager
+      entity via the home interface. This is a single documented source with clear
+      intent and corresponding code implementation.
+    risk_class: operational
+    basis: >
+      ProcessManagerEJB.createManager(String orderId, String status) takes an orderId
+      and status, then calls mlh.create(orderId, status) to create a ManagerLocal entity.
+      The method javadoc states it is called "when new purchase orders are received and
+      want to start the workflow process to fulfill the order."
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/ejb/ProcessManagerEJB.java
+        line_start: 62
+        line_end: 68
+        excerpt: |
+          /**
+           * Business method used for when new purchase orders are recieved
+           * and want to start the workflow process to fullfil the order
+           */
+          public void createManager(String orderId, String status) throws CreateException {
+            ManagerLocal manager = mlh.create(orderId, status);
+          }
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/manager/ejb/ManagerEJB.java
+        line_start: 61
+        line_end: 68
+        excerpt: |
+          public String ejbCreate(String orderId, String status) throws CreateException {
+              setOrderId(orderId);
+              setStatus(status);
+              return null;
+          }
+    stack_metadata:
+      ejb.bean: ProcessManagerEJB (stateless session)
+      ejb.transaction: Required
+
+  - record_key: order-fulfillment-wf-0003
+    kind: requirement
+    capability_key: order-fulfillment
+    requirement: >
+      The system SHALL allow updating the status of a tracked order to reflect progress
+      through the fulfillment workflow (e.g., from PENDING to APPROVED, APPROVED to
+      SHIPPED_PART, or any status to DENIED).
+    confidence: high
+    confidence_basis: >
+      ProcessManagerEJB.updateStatus() is explicitly documented for this purpose.
+      ManagerEJB has setStatus() as a CMP field. The container transaction management
+      ensures atomicity of updates. Method appears in both the session bean interface
+      and the entity bean, providing dual enforcement points.
+    risk_class: operational
+    basis: >
+      ProcessManagerEJB.updateStatus(String orderId, String status) is documented as
+      "Business method used to keep track of an order in the workflow process." It looks
+      up the Manager entity by orderId and calls setStatus() on it. ManagerEJB exposes
+      setStatus(String status) as an abstract method backed by a CMP field.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/ejb/ProcessManagerEJB.java
+        line_start: 70
+        line_end: 76
+        excerpt: |
+          /**
+           * Business method used to keep track of an order in the workflow process
+           */
+          public void updateStatus(String orderId, String status) throws FinderException {
+            ManagerLocal manager = mlh.findByPrimaryKey(orderId);
+            manager.setStatus(status);
+          }
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/ejb-jar.xml
+        line_start: 328
+        line_end: 335
+        excerpt: |
+          <container-transaction>
+            <method>
+              <ejb-name>ManagerEJB</ejb-name>
+              <method-intf>Local</method-intf>
+              <method-name>setStatus</method-name>
+              <method-params>
+                <method-param>java.lang.String</method-param>
+              </method-params>
+            </method>
+            <trans-attribute>Required</trans-attribute>
+          </container-transaction>
+    stack_metadata:
+      ejb.bean: ProcessManagerEJB (stateless session), ManagerEJB (entity bean)
+      ejb.transaction: Required
+
+  - record_key: order-fulfillment-wf-0004
+    kind: requirement
+    capability_key: order-fulfillment
+    requirement: >
+      The system SHALL provide a method to query the current status of a specific order
+      by its orderId.
+    confidence: high
+    confidence_basis: >
+      ProcessManagerEJB.getStatus(String orderId) is documented and implemented.
+      ManagerEJB.getStatus() is a CMP field accessor. Both session and entity beans
+      expose the method. Container transaction management enforces consistency.
+    risk_class: operational
+    basis: >
+      ProcessManagerEJB defines getStatus(String orderId) which looks up the Manager
+      entity and returns its status. ManagerEJB exposes getStatus() as an abstract
+      method backed by the status CMP field in ejb-jar.xml.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/ejb/ProcessManagerEJB.java
+        line_start: 78
+        line_end: 84
+        excerpt: |
+          /**
+           * Business method used to keep track of an order in the workflow process
+           */
+          public String getStatus(String orderId) throws FinderException {
+            ManagerLocal manager = mlh.findByPrimaryKey(orderId);
+            return manager.getStatus();
+          }
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/ejb-jar.xml
+        line_start: 369
+        line_end: 379
+        excerpt: |
+          <container-transaction>
+            <method>
+              <ejb-name>ProcessManagerEJB</ejb-name>
+              <method-intf>Local</method-intf>
+              <method-name>getStatus</method-name>
+              <method-params>
+                <method-param>java.lang.String</method-param>
+              </method-params>
+            </method>
+            <trans-attribute>Required</trans-attribute>
+          </container-transaction>
+    stack_metadata:
+      ejb.bean: ProcessManagerEJB (stateless session)
+      ejb.transaction: Required
+
+  - record_key: order-fulfillment-wf-0005
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The admin portal SHALL provide a method to retrieve all orders in a specified
+      status, enabling admins to view and manage orders at a particular stage of
+      fulfillment.
+    confidence: high
+    confidence_basis: >
+      ProcessManagerEJB.getOrdersByStatus(String status) is documented as "Business
+      method to get all orders of given status for the admin." The ManagerEJB defines
+      a CMP query findOrdersByStatus that retrieves entities with matching status.
+      This is enforced at both the session bean and entity bean levels with container
+      transaction management.
+    risk_class: operational
+    basis: >
+      ProcessManagerEJB defines getOrdersByStatus(String status) that calls
+      mlh.findOrdersByStatus(status) and returns a Collection. ManagerEJB's ejb-jar.xml
+      declares a CMP query with EJB-QL: SELECT DISTINCT OBJECT(a) FROM Manager a
+      WHERE a.status = ?1. The method is available to the admin interface.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/ejb/ProcessManagerEJB.java
+        line_start: 86
+        line_end: 91
+        excerpt: |
+          /**
+           * Business method to get all orders of given status for the admin
+           */
+          public Collection getOrdersByStatus(String status) throws FinderException {
+              return mlh.findOrdersByStatus(status);
+          }
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/ejb-jar.xml
+        line_start: 70
+        line_end: 79
+        excerpt: |
+          <query>
+            <description></description>
+            <query-method>
+              <method-name>findOrdersByStatus</method-name>
+              <method-params>
+                <method-param>java.lang.String</method-param>
+              </method-params>
+            </query-method>
+            <ejb-ql>SELECT DISTINCT OBJECT(a) FROM Manager a WHERE a.status = ?1</ejb-ql>
+          </query>
+    stack_metadata:
+      ejb.bean: ProcessManagerEJB (stateless session), ManagerEJB (entity bean)
+      cmp.query: findOrdersByStatus
+      ejb.transaction: Required
+
+  - record_key: order-fulfillment-entity-0001
+    kind: entity
+    capability_key: order-fulfillment
+    requirement: >
+      The system SHALL maintain a persistent Manager entity with orderId as the
+      primary key and status as a mutable field, representing an order's current
+      fulfillment state.
+    confidence: high
+    confidence_basis: >
+      ManagerEJB is declared as a CMP 2.x entity bean with container-managed
+      persistence in ejb-jar.xml. Both orderId and status are defined as CMP fields
+      with explicit field-name declarations. The primary key constraint and field
+      persistence are declaratively enforced, providing the highest confidence.
+    risk_class: operational
+    basis: >
+      ejb-jar.xml declares ManagerEJB as an entity bean with persistence-type
+      "Container" and CMP version 2.x. It defines two CMP fields: orderId and status.
+      The primkey-field is orderId. ManagerEJB.java implements EntityBean and provides
+      abstract getters/setters for both fields.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/ejb-jar.xml
+        line_start: 46
+        line_end: 80
+        excerpt: |
+          <entity>
+            <display-name>ManagerEB</display-name>
+            <ejb-name>ManagerEJB</ejb-name>
+            <local-home>com.sun.j2ee.blueprints.processmanager.manager.ejb.ManagerLocalHome</local-home>
+            <local>com.sun.j2ee.blueprints.processmanager.manager.ejb.ManagerLocal</local>
+            <ejb-class>com.sun.j2ee.blueprints.processmanager.manager.ejb.ManagerEJB</ejb-class>
+            <persistence-type>Container</persistence-type>
+            <prim-key-class>java.lang.String</prim-key-class>
+            <reentrant>False</reentrant>
+            <cmp-version>2.x</cmp-version>
+            <abstract-schema-name>Manager</abstract-schema-name>
+            <cmp-field>
+              <description>no description</description>
+              <field-name>status</field-name>
+            </cmp-field>
+            <cmp-field>
+              <description>no description</description>
+              <field-name>orderId</field-name>
+            </cmp-field>
+            <primkey-field>orderId</primkey-field>
+      - path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/manager/ejb/ManagerEJB.java
+        line_start: 49
+        line_end: 68
+        excerpt: |
+          public abstract class ManagerEJB implements EntityBean {
+
+              private EntityContext context = null;
+
+              // CMP fields
+              public abstract String getOrderId();
+              public abstract void setOrderId(String orderId);
+
+              public abstract String getStatus();
+              public abstract void setStatus(String status);
+
+              // EJB create methods
+              public String ejbCreate(String orderId, String status) throws CreateException {
+                  setOrderId(orderId);
+                  setStatus(status);
+                  return null;
+              }
+    stack_metadata:
+      ejb.bean: ManagerEJB (entity bean, CMP 2.x)
+      db.object: Manager (abstract schema name)
+
+findings:
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/components/processmanager/src/com/sun/j2ee/blueprints/processmanager/transitions
+    description: >
+      The transitions/ directory contains TransitionDelegate interface, TransitionInfo
+      class, TransitionDelegateFactory, and TransitionException, suggesting a pluggable
+      transition mechanism for orchestrating state changes. However, these classes are
+      not referenced by ProcessManagerEJB or ManagerEJB, and no concrete TransitionDelegate
+      implementations are visible in this module. It is unclear whether this framework
+      is actually used for order fulfillment workflows or if it is dead code / a template
+      for future extension. Reachability from the main process manager flow is unresolved.
