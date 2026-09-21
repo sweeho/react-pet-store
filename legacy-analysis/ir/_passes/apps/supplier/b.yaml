@@ -1,0 +1,505 @@
+records:
+  - record_key: SUPMGMT-AUTH-0002
+    kind: requirement
+    capability_key: admin-operations
+    requirement: >
+      The system SHALL restrict inventory management operations to users with the
+      administrator role. Users without this role SHALL be denied access to inventory
+      update functionality.
+    confidence: high
+    confidence_basis: >
+      Role-based access control is enforced in two independent places: (1) web.xml
+      declares security-constraint on /RcvrRequestProcessor with auth-constraint
+      requiring administrator role (lines 91-104), and (2) displayinventory.jsp
+      explicitly checks request.isUserInRole("administrator") before rendering the
+      update form (line 66). Both enforcements are required by the J2EE container.
+    risk_class: operational
+    basis: >
+      The web.xml security-constraint explicitly names the administrator role as a
+      requirement for GET and POST access to /RcvrRequestProcessor. The JSP performs
+      an additional runtime role check before rendering the form. This dual enforcement
+      ensures that even if the servlet is reached, the JSP will refuse to render unless
+      the user has the administrator role.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/WEB-INF/web.xml
+        line_start: 91
+        line_end: 104
+        excerpt: |
+          <security-constraint>
+            <web-resource-collection>
+              <web-resource-name>MySecureBit0</web-resource-name>
+              <url-pattern>/RcvrRequestProcessor</url-pattern>
+              <http-method>GET</http-method>
+              <http-method>POST</http-method>
+            </web-resource-collection>
+            <auth-constraint>
+              <role-name>administrator</role-name>
+            </auth-constraint>
+            <user-data-constraint>
+              <transport-guarantee>NONE</transport-guarantee>
+            </user-data-constraint>
+          </security-constraint>
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/displayinventory.jsp
+        line_start: 66
+        line_end: 128
+        excerpt: |
+          if(request.isUserInRole("administrator")) {
+          %>
+              <form action="RcvrRequestProcessor" method="post">
+              ...
+          <%
+          } else {
+          %>
+              <font size="5" color="green">
+              You are not authorised to update the status of orders.
+              </font>
+          <%
+          }
+    stack_metadata:
+      framework: Servlet/JSP
+      security.authorization: role-based
+
+  - record_key: SUPMGMT-CONFIG-0002
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      HTTP session timeout for supplier module SHALL be set to 54 minutes.
+    confidence: medium
+    confidence_basis: >
+      The session timeout value is declared in web.xml with a specific numeric value
+      (54 minutes). The configuration is not commented and appears to be intentional.
+      However, no business rationale or configuration documentation explains why this
+      specific value was chosen.
+    risk_class: operational
+    basis: >
+      The web.xml session-config element declares a session-timeout of 54 minutes.
+      This is a container-managed setting that applies to all sessions in the WAR.
+      The value appears to be specific (not a round number like 30 or 60) which may
+      indicate a deliberate choice, though the reason is not documented.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/WEB-INF/web.xml
+        line_start: 72
+        line_end: 74
+        excerpt: |
+          <session-config>
+            <session-timeout>54</session-timeout>
+          </session-config>
+    stack_metadata:
+      config.type: session-timeout
+      config.value: "54"
+
+  - record_key: SUPMGMT-RULE-0001
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      When updating inventory quantities via the web interface, the system SHALL
+      validate that the new quantity is a non-negative integer (>= 0). If the
+      entered quantity is negative, the update for that item SHALL be skipped.
+    confidence: high
+    confidence_basis: >
+      The RcvrRequestProcessor.updateInventory() method contains explicit validation
+      at line 127 that checks qty.intValue() >= 0. Items with negative quantities are
+      explicitly skipped (continue statement on line 125). This is enforced during
+      each inventory update request.
+    risk_class: financial
+    basis: >
+      In the updateInventory() method, after parsing the quantity string, the code
+      explicitly checks if qty.intValue() >= 0 before updating. If the condition is
+      false, the code continues to the next item without calling inventory.setQuantity(),
+      effectively rejecting negative values. This prevents inventory from being set to
+      negative quantities.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/com/sun/j2ee/blueprints/supplier/inventory/web/RcvrRequestProcessor.java
+        line_start: 110
+        line_end: 137
+        excerpt: |
+          private void updateInventory(HttpServletRequest req) {
+            String itemId;
+            InventoryLocal inventory;
+            try {
+              Enumeration e = req.getParameterNames();
+              while ((e != null) && e.hasMoreElements()) {
+                String param = ((String)e.nextElement()).trim();
+                if ((param != null) && param.startsWith("item_")) {
+                  itemId = param.substring("item_".length(),param.length());
+                  if(itemId != null) {
+                    String newQty = req.getParameter("qty_" + itemId);
+                    if((newQty == null) || (newQty.length() <= 0))
+                      continue;
+                    Integer qty = new Integer(newQty);
+                    if(qty.intValue() >= 0 ) {
+                      inventory = inventoryHomeRef.findByPrimaryKey(itemId);
+                      inventory.setQuantity(qty.intValue());
+                    }
+    stack_metadata:
+      framework: Servlet
+      validation.type: numeric-range
+
+  - record_key: SUPMGMT-SCREEN-0002
+    kind: screen
+    capability_key: admin-operations
+    requirement: >
+      The inventory update screen SHALL display a table of all items in inventory
+      with their current quantity, accept a new quantity input for each item, and
+      provide a checkbox to select which items to update. The screen SHALL include
+      a submit button to apply changes.
+    confidence: high
+    confidence_basis: >
+      The displayinventory.jsp renders this exact UI structure with lines 78-104
+      building an HTML table that iterates through inventory items. The form uses
+      POST method to /RcvrRequestProcessor with hidden field identifying the action.
+      The table header, rows, input fields and checkbox are all explicitly rendered.
+    risk_class: presentational
+    basis: >
+      The JSP page generates an HTML form with a table structure. For each inventory
+      item returned by displayInventory.getInventory(), the page renders a row with
+      the item ID, current quantity, an input field for new quantity (named "qty_ITEMID"),
+      and a checkbox (named "item_ITEMID"). The form submits to RcvrRequestProcessor
+      with currentScreen=updateinventory.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/displayinventory.jsp
+        line_start: 69
+        line_end: 112
+        excerpt: |
+          <form action="RcvrRequestProcessor" method="post">
+          <input type="hidden" name="currentScreen" value="updateinventory">
+          <input type="hidden" name="action" value="updateinventory">
+          <%
+              Collection inventoryItems = displayInventory.getInventory();
+              if (inventoryItems != null) {
+          %>
+                  <br>
+                  <br>
+                  <table border="0" bgcolor="#336666">
+                  <tr>
+                      <td><font color="white" size="3">Item Id</font></td>
+                      <td><font color="white" size="3">Existing Quantity</font></td>
+                      <td><font color="white" size="3">New Quantity</font></td>
+                      <td><font color="white" size="3">Update</font></td>
+                  </tr>
+
+          <%
+                  Iterator it = null;
+                  if(inventoryItems != null)
+                      it = inventoryItems.iterator();
+                  while ((it != null) && it.hasNext()) {
+                      InventoryLocal anItem = (InventoryLocal)it.next();
+          %>
+
+                  <tr bgcolor="#eeebcc">
+                  <td align="center"><%= anItem.getItemId() %></td>
+                  <td align="right"><%= anItem.getQuantity() %></td>
+                  <td><input type="text"
+                         name="<%= "qty_"+ anItem.getItemId() %>"
+                         size="6"></td>
+                  <td align="center">
+                           <input type=checkbox
+                           name="<%= "item_"+ anItem.getItemId() %>"
+                           value="false"></td>
+                  </tr>
+          <%
+                  }
+          %>
+                  </table>
+                  <br><br>
+                  <input type="image" border="0"
+                         src="images/button_submit.gif" name="button">
+              </form>
+    stack_metadata:
+      jsp.page: displayinventory.jsp
+      form.method: POST
+      form.target: RcvrRequestProcessor
+
+  - record_key: SUPMGMT-WORKFLOW-0003
+    kind: workflow
+    capability_key: order-fulfillment
+    requirement: >
+      When inventory is updated via the web interface, the system SHALL in a single
+      transaction: (1) update the specified inventory quantities, (2) attempt to
+      process any pending purchase orders, and (3) if items were shipped, send
+      invoices back to the Order Processing Center. All steps SHALL be committed
+      together or rolled back on failure.
+    confidence: high
+    confidence_basis: >
+      RcvrRequestProcessor.doPost() explicitly wraps the entire sequence in a
+      UserTransaction (lines 184-188). The updateInventory() call, processPendingPO()
+      call, and sendInvoices() call are all within the try block with ut.begin()
+      and ut.commit(). If any step fails, the catch blocks allow the transaction
+      to be rolled back.
+    risk_class: financial
+    basis: >
+      The RcvrRequestProcessor explicitly creates a UserTransaction, calls begin(),
+      then sequentially: (1) updateInventory(req), (2) procPO.processPendingPO()
+      to get collection of invoices, (3) sendInvoices() to transition them. The
+      ut.commit() is only called if all steps complete successfully. Multiple
+      catch blocks for transaction-related exceptions indicate the developer was
+      conscious of transaction semantics.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/com/sun/j2ee/blueprints/supplier/inventory/web/RcvrRequestProcessor.java
+        line_start: 179
+        line_end: 207
+        excerpt: |
+          if(curScreen.equals("updateinventory")) {
+            UserTransaction ut = null;
+            try {
+              InitialContext ic = new InitialContext();
+              ut = (UserTransaction) ic.lookup(JNDINames.USER_TRANSACTION);
+              ut.begin();        // start the xaction.
+              updateInventory(req);
+              Collection invoices = procPO.processPendingPO();
+              sendInvoices(invoices);
+              ut.commit();        // end xaction
+              getServletConfig().getServletContext().getRequestDispatcher("/back.jsp").forward(req, resp);
+            } catch (FinderException fe) {
+              fe.printStackTrace();
+            } catch (NamingException ne) {
+              ne.printStackTrace();
+            } catch (NotSupportedException nse) {
+              ne.printStackTrace();
+            } catch (IllegalStateException re) {
+              re.printStackTrace();
+            } catch (RollbackException re) {
+              re.printStackTrace();
+            } catch (HeuristicMixedException hme) {
+              hme.printStackTrace();
+            } catch (HeuristicRollbackException hre) {
+              hre.printStackTrace();
+            } catch (SystemException se) {
+              se.printStackTrace();
+            }
+          }
+    stack_metadata:
+      framework: Servlet
+      transaction.type: UserTransaction
+      transaction.boundary: explicit
+
+  - record_key: SUPMGMT-ENT-0002
+    kind: entity
+    capability_key: supplier-management
+    requirement: >
+      The system SHALL maintain an Inventory entity with the following attributes:
+      itemId (String, primary key), quantity (int). The inventory SHALL support
+      operations to reduce quantity by a specified amount.
+    confidence: high
+    confidence_basis: >
+      The InventoryEJB is declared as a CMP 2.x entity bean in ejb-jar.xml with two
+      cmp-fields (itemId and quantity) and primkey-field identifying itemId. The
+      reduceQuantity() method is implemented in the EJB class and is called from
+      multiple locations. The transaction attribute of Required is enforced on all
+      methods.
+    risk_class: financial
+    basis: >
+      The ejb-jar.xml declares InventoryEJB as a container-managed persistence entity
+      with persistence-type Container and cmp-version 2.x. Two fields are declared:
+      itemId (the primary key) and quantity. The InventoryEJB.java implements
+      reduceQuantity(int quantity) which subtracts the parameter from the current
+      quantity. All methods are configured with Required transaction attribute.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/ejb-jar.xml
+        line_start: 49
+        line_end: 81
+        excerpt: |
+          <entity>
+            <description>Inventory CMP EJB</description>
+            <display-name>InventoryEB</display-name>
+            <ejb-name>InventoryEJB</ejb-name>
+            <local-home>com.sun.j2ee.blueprints.supplier.inventory.ejb.InventoryLocalHome</local-home>
+            <local>com.sun.j2ee.blueprints.supplier.inventory.ejb.InventoryLocal</local>
+            <ejb-class>com.sun.j2ee.blueprints.supplier.inventory.ejb.InventoryEJB</ejb-class>
+            <persistence-type>Container</persistence-type>
+            <prim-key-class>java.lang.String</prim-key-class>
+            <reentrant>False</reentrant>
+            <cmp-version>2.x</cmp-version>
+            <abstract-schema-name>Inventory</abstract-schema-name>
+            <cmp-field>
+              <field-name>itemId</field-name>
+            </cmp-field>
+            <cmp-field>
+              <field-name>quantity</field-name>
+            </cmp-field>
+            <primkey-field>itemId</primkey-field>
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/com/sun/j2ee/blueprints/supplier/inventory/ejb/InventoryEJB.java
+        line_start: 49
+        line_end: 85
+        excerpt: |
+          public abstract class InventoryEJB implements EntityBean {
+            private EntityContext ectx = null;
+            public abstract String getItemId();
+            public abstract void setItemId(String itemId);
+            public abstract int getQuantity();
+            public abstract void setQuantity(int quantity);
+            public void reduceQuantity(int quantity) {
+              int q = this.getQuantity();
+              setQuantity(q-quantity);
+            }
+    stack_metadata:
+      db.object: InventoryEJB
+      ejb.bean-type: Entity
+      ejb.persistence: Container-Managed
+      ejb.cmp-version: "2.x"
+
+  - record_key: SUPMGMT-RULE-0002
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      When processing inventory updates, the system SHALL only apply updates to items
+      that are selected via a checkbox on the form. Items for which the checkbox is
+      not selected SHALL not have their quantity modified, even if a new quantity
+      value is provided in the input field.
+    confidence: high
+    confidence_basis: >
+      The RcvrRequestProcessor.updateInventory() method iterates through parameter
+      names looking for those that start with "item_" (line 119). This parameterization
+      pattern matches the checkbox parameter names in the JSP (line 102: name="item_ITEMID").
+      Only when an item_ parameter is found does the code proceed to get and process
+      the corresponding qty_ value. Unchecked checkboxes do not send parameters.
+    risk_class: operational
+    basis: >
+      HTML form checkboxes only send their parameter if checked. The RcvrRequestProcessor
+      explicitly looks for parameters starting with "item_" to identify which items
+      to update. For each found item_ parameter, it then looks up the corresponding
+      qty_ parameter. This design ensures only selected items are updated.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/com/sun/j2ee/blueprints/supplier/inventory/web/RcvrRequestProcessor.java
+        line_start: 116
+        line_end: 132
+        excerpt: |
+          Enumeration e = req.getParameterNames();
+          while ((e != null) && e.hasMoreElements()) {
+            String param = ((String)e.nextElement()).trim();
+            if ((param != null) && param.startsWith("item_")) {
+              itemId = param.substring("item_".length(),param.length());
+              if(itemId != null) {
+                String newQty = req.getParameter("qty_" + itemId);
+                if((newQty == null) || (newQty.length() <= 0))
+                  continue;
+                Integer qty = new Integer(newQty);
+                if(qty.intValue() >= 0 ) {
+                  inventory = inventoryHomeRef.findByPrimaryKey(itemId);
+                  inventory.setQuantity(qty.intValue());
+                }
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/displayinventory.jsp
+        line_start: 100
+        line_end: 104
+        excerpt: |
+          <td align="center">
+              <input type=checkbox
+              name="<%= "item_"+ anItem.getItemId() %>"
+              value="false"></td>
+    stack_metadata:
+      framework: Servlet
+      pattern: parameter-driven-selection
+
+  - record_key: SUPMGMT-AUTH-0003
+    kind: requirement
+    capability_key: user-accounts
+    requirement: >
+      The system SHALL support form-based authentication where users provide username
+      and password credentials. Failed authentication attempts SHALL display an error page.
+    confidence: high
+    confidence_basis: >
+      web.xml declares form-based login configuration (lines 106-113) with a login page
+      and error page specified. The login.jsp renders an HTML form posting to the
+      standard j_security_check action, which is the J2EE container's form-based auth
+      mechanism. This is a declarative configuration enforced by the container.
+    risk_class: operational
+    basis: >
+      The web.xml login-config element specifies auth-method FORM with form-login-config
+      declaring form-login-page and form-error-page. The login.jsp renders a form with
+      j_username and j_password fields posting to j_security_check. This is the standard
+      J2EE Servlet 2.3 form-based authentication mechanism.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/WEB-INF/web.xml
+        line_start: 106
+        line_end: 113
+        excerpt: |
+          <login-config>
+            <auth-method>FORM</auth-method>
+            <realm-name>default</realm-name>
+            <form-login-config>
+              <form-login-page>/login.jsp</form-login-page>
+              <form-error-page>/error.jsp</form-error-page>
+            </form-login-config>
+          </login-config>
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/login.jsp
+        line_start: 53
+        line_end: 84
+        excerpt: |
+          <form action="j_security_check" method=post>
+          <table>
+          <tr>
+           <td align="center" >
+           <table border="0">
+           <tr>
+            <td><b>User ID:</b></td>
+            <td>
+              <input type="text" size="15" name="j_username" value="supplier">
+            </td>
+           </tr>
+           <tr>
+            <td><b>Password:</b></td>
+             <td>
+              <input type="password" size="15" name="j_password" value="supplier">
+            </td>
+           </tr>
+    stack_metadata:
+      framework: Servlet
+      auth.method: FORM
+      auth.realm: default
+
+  - record_key: SUPMGMT-RULE-0003
+    kind: business-rule
+    capability_key: admin-operations
+    requirement: >
+      When an inventory quantity input field is submitted with an empty value or
+      whitespace-only value, the system SHALL skip updating that item's inventory.
+    confidence: high
+    confidence_basis: >
+      The RcvrRequestProcessor.updateInventory() method explicitly checks at line 124:
+      if((newQty == null) || (newQty.length() <= 0)) continue; This condition skips
+      processing when the quantity string is null or has zero length, which handles
+      both missing and empty values.
+    risk_class: operational
+    basis: >
+      After extracting the qty_ parameter value, the code checks if the value is null
+      or empty before attempting to parse it as an Integer. If either condition is true,
+      the code executes continue to move to the next item, effectively skipping the
+      update for that item.
+    traces:
+      - path: legacy-source/petstore1.3.2/src/apps/supplier/src/com/sun/j2ee/blueprints/supplier/inventory/web/RcvrRequestProcessor.java
+        line_start: 122
+        line_end: 130
+        excerpt: |
+          if(itemId != null) {
+            String newQty = req.getParameter("qty_" + itemId);
+            if((newQty == null) || (newQty.length() <= 0))
+              continue;
+            Integer qty = new Integer(newQty);
+            if(qty.intValue() >= 0 ) {
+              inventory = inventoryHomeRef.findByPrimaryKey(itemId);
+              inventory.setQuantity(qty.intValue());
+            }
+    stack_metadata:
+      framework: Servlet
+      validation.type: null-and-empty-check
+
+findings:
+  - kind: ambiguity
+    path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/displayinventory.jsp
+    description: >
+      The checkbox element in the inventory update form has value="false" (line 102),
+      which is unusual since unchecked checkboxes do not send any parameter. The value
+      attribute should typically be "true" or an item identifier. It is unclear whether
+      this incorrect value attribute represents dead code, a bug in the original
+      implementation, or intentional design. The actual behavior (only selected items
+      being processed) works despite this value, suggesting the value attribute is
+      unused in the form processing.
+
+  - kind: unparseable
+    path: legacy-source/petstore1.3.2/src/apps/supplier/src/docroot/login.jsp
+    description: >
+      The login form has default values hardcoded in the input fields (value="supplier"
+      for both username and password on lines 61 and 67). This appears to be a
+      development convenience that should not be in production code, as it significantly
+      reduces authentication security. It is unclear whether this is intentional for a
+      development/demo environment or represents a security defect that was not removed.
