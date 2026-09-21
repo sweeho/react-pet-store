@@ -1,0 +1,157 @@
+%% EXTRACTED FROM LEGACY SOURCE — evidence of what exists, not a build target. Where this disagrees with a capability delta spec, the delta spec wins.
+erDiagram
+    USER ||--|| PROFILE : has
+    USER ||--|| ACCOUNT : has
+    ACCOUNT ||--|| CONTACT_INFO : has
+    ACCOUNT ||--|| CREDIT_CARD : has
+    CONTACT_INFO ||--|| ADDRESS : has
+    CUSTOMER ||--|| ACCOUNT : has
+    CUSTOMER ||--|| PROFILE : has
+    CUSTOMER ||--|| SHOPPING_CART : has
+
+    PURCHASE_ORDER ||--|| CONTACT_INFO : "billTo"
+    PURCHASE_ORDER ||--|| CONTACT_INFO : "shipTo"
+    PURCHASE_ORDER ||--|| CREDIT_CARD : has
+    PURCHASE_ORDER ||--|{ LINE_ITEM : contains
+    PURCHASE_ORDER ||--|| ORDER_STATUS : has
+
+    SUPPLIER_ORDER ||--|| CONTACT_INFO : "shippingInfo"
+    SUPPLIER_ORDER ||--|{ LINE_ITEM : has
+    SUPPLIER_ORDER ||--|| ORDER_STATUS : has
+
+    INVENTORY ||--|{ LINE_ITEM : stocks
+
+    SHOPPING_CART ||--|{ CART_ITEM : contains
+    CATALOG ||--|{ ITEM : contains
+    ITEM ||--|| PRODUCT : is
+    PRODUCT ||--|| CATEGORY : in
+
+    USER {
+        string userName PK
+        string password
+    }
+
+    PROFILE {
+        int profileId PK
+        string preferredLanguage
+        string favoriteCategory
+        boolean myListPreference
+        boolean bannerPreference
+    }
+
+    ACCOUNT {
+        int accountId PK
+        int contactInfoId FK
+        int creditCardId FK
+    }
+
+    CONTACT_INFO {
+        int contactInfoId PK
+        string givenName
+        string familyName
+        string telephone
+        string email
+        int addressId FK
+    }
+
+    ADDRESS {
+        int addressId PK
+        string streetName1
+        string streetName2
+        string city
+        string state
+        string country
+        string zipCode
+    }
+
+    CREDIT_CARD {
+        int creditCardId PK
+        string cardNumber
+        string cardType
+        string expiryDate
+    }
+
+    CUSTOMER {
+        int customerId PK
+        string userId FK
+        int accountId FK
+        int profileId FK
+    }
+
+    SHOPPING_CART {
+        int cartId PK
+        int customerId FK
+        string locale
+    }
+
+    CART_ITEM {
+        int cartItemId PK
+        int cartId FK
+        string itemId
+        int quantity
+    }
+
+    PURCHASE_ORDER {
+        string orderId PK
+        string userId
+        date orderDate
+        string emailId
+        float totalPrice
+        int billToId FK
+        int shipToId FK
+        int creditCardId FK
+        int statusId FK
+    }
+
+    LINE_ITEM {
+        int lineItemId PK
+        string orderOrSupplierOrderId FK
+        string itemId FK
+        int quantity
+        int quantityShipped
+        float unitPrice
+        string categoryId
+        string productId
+    }
+
+    SUPPLIER_ORDER {
+        string poId PK
+        long poDate
+        string poStatus
+        int contactInfoId FK
+    }
+
+    ORDER_STATUS {
+        int statusId PK
+        string status
+        string description
+    }
+
+    INVENTORY {
+        string itemId PK
+        int quantity
+    }
+
+    CATALOG {
+        int catalogId PK
+    }
+
+    ITEM {
+        string itemId PK
+        string productId
+        string categoryId
+        string name
+        string attribute
+        float unitCost
+    }
+
+    PRODUCT {
+        string productId PK
+        string name
+        string categoryId FK
+    }
+
+    CATEGORY {
+        string categoryId PK
+        string name
+    }

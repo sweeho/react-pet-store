@@ -1,0 +1,370 @@
+schemaVersion: 1
+program:
+  key: petstore
+  title: Java Pet Store E-Commerce Platform
+  source: extraction
+  generator: vortex-spec-extraction
+  sourceRef: vortex/legacy-spec/sx-0001
+capabilities:
+  - slug: user-accounts
+    title: User Account Management and Authentication
+    order: 1
+    dependsOn: []
+    priority: 0
+    change:
+      dir: openspec/changes/sx-user-accounts
+      specCapabilities:
+        - user-accounts
+    canvas:
+      problem: Users need secure account creation, authentication, and profile management to personalize their shopping experience and maintain customer data.
+      solution: Implement EJB-based user authentication with session management, account creation with validation, profile preferences, and contact information storage.
+      userStories:
+        - As a new customer, I want to create an account with username and password so that I can access my profile and purchase history.
+        - As a returning customer, I want to log in securely and have my preferences remembered so that I can shop efficiently.
+        - As a customer, I want to manage my profile, contact information, and preferences so that my account reflects my current information.
+      acceptanceCriteria:
+        - "User Authentication — validates username and password match; returns success only if both match"
+        - "Account Creation — enforces 25-character username limit, rejects '%' and '*' characters, validates password length"
+        - "Session Management — stores authentication state in j_signon session attribute; protects resources from unauthenticated access"
+        - "Protected Resources — redirects unauthenticated users to sign-on page and redirects back to original URL after authentication"
+        - "Profile Preferences — stores and retrieves preferred language, favorite category, and display preferences"
+        - "Contact Information — captures and manages customer name, telephone, email, and complete address"
+      outOfScope:
+        - Password reset or recovery mechanisms
+        - Account lockout after failed authentication attempts
+        - Password hashing (stored as plain text in legacy system)
+        - Multi-factor authentication
+        - Social login integration
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+      screens:
+        - "Sign-on screen: two-column layout with existing customer login form (username, password, remember checkbox) and new customer registration form (username, password, confirm password)"
+        - "Create account screen: collects contact information (name, telephone, email), address (street, city, state, zip, country), credit card, and profile preferences"
+        - "Customer profile screen: displays current profile, contact info, address, and credit card; allows editing all customer information"
+        - "Duplicate account error screen: displayed when account creation attempts to use an existing username"
+        - "Sign-off screen: available to logged-in customers to end their session"
+
+  - slug: catalog-browsing
+    title: Product Catalog Browsing
+    order: 2
+    dependsOn: []
+    priority: 0
+    change:
+      dir: openspec/changes/sx-catalog-browsing
+      specCapabilities:
+        - catalog-browsing
+    canvas:
+      problem: Customers need to browse and search products organized by categories to find items for purchase.
+      solution: Implement product catalog with category retrieval, item listing, pagination, and multi-locale support.
+      userStories:
+        - As a customer, I want to browse products by category to find items I need.
+        - As a customer, I want to see product details including price, description, and attributes.
+        - As a customer, I want to navigate through results with pagination to explore the entire catalog.
+      acceptanceCriteria:
+        - "Category Retrieval — retrieves categories with localization for en_US, ja_JP, zh_CN"
+        - "Product Listing — returns paginated list of items with ID, name, attributes, and unit cost"
+        - "Pagination Metadata — includes hasNextPage flag for UI navigation"
+        - "Locale Support — defaults to en_US; supports customer language preference"
+      outOfScope:
+        - Inventory availability at catalog level
+        - Product recommendations or filtering
+        - Search facets or advanced query syntax
+        - Product reviews or ratings
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+
+  - slug: shopping-cart
+    title: Shopping Cart Management
+    order: 3
+    dependsOn:
+      - user-accounts
+    priority: 0
+    change:
+      dir: openspec/changes/sx-shopping-cart
+      specCapabilities:
+        - shopping-cart
+    canvas:
+      problem: Customers need to maintain a list of items they want to purchase, adjust quantities, and view totals before placing an order.
+      solution: Implement a stateful shopping cart EJB with HashMap-based item storage, supporting add/remove/update operations, total calculation, and locale-aware enrichment from the catalog.
+      userStories:
+        - As a shopper, I want to add items to my cart so that I can purchase multiple items in one order.
+        - As a shopper, I want to remove items from my cart if I change my mind.
+        - As a shopper, I want to adjust quantities and see updated totals so that I can control my order.
+        - As a shopper, I want to see my cart displayed in my preferred language with item details and pricing.
+      acceptanceCriteria:
+        - "Add Item — adds items to cart with default quantity 1 or explicit quantity"
+        - "Remove Item — removes items from cart by item ID"
+        - "Update Quantity — modifies item quantities; removes item if quantity becomes zero or negative"
+        - "Calculate Total — computes subtotal as sum of (unit cost × quantity) for all items"
+        - "Display Empty Cart — shows message when cart contains no items"
+        - "Enrich Items — fetches full item details from catalog for display"
+        - "Locale Support — cart defaults to Locale.US; customer locale can override for item enrichment"
+      outOfScope:
+        - Wish lists or saved carts
+        - Promo codes or discount application
+        - Inventory checking at cart level
+        - Cart persistence across sessions (state is session-scoped)
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+      screens:
+        - "Cart display screen: shows table with item details (ID, name, attribute), quantity input field, unit cost, and line total; includes Remove button per line and Update Cart button"
+        - "Empty cart screen: displays 'Your Shopping Cart is Empty' message with link to browse catalog"
+        - "Checkout link: provided on cart screen when cart is not empty, navigates to order entry"
+
+  - slug: order-placement
+    title: Purchase Order Creation
+    order: 5
+    dependsOn:
+      - shopping-cart
+      - user-accounts
+      - payment-processing
+    priority: 0
+    change:
+      dir: openspec/changes/sx-order-placement
+      specCapabilities:
+        - order-placement
+    canvas:
+      problem: Customers need to provide shipping, billing, and payment information to complete a purchase and receive order confirmation.
+      solution: Implement order creation workflow that captures address and payment info, generates unique order IDs, calculates totals, and clears the cart after successful order placement.
+      userStories:
+        - As a customer, I want to enter my shipping and billing address during checkout so that my order is delivered to the correct location.
+        - As a customer, I want to provide credit card information securely so that I can pay for my order.
+        - As a customer, I want to see an order confirmation with my order number and total so that I know my purchase was successful.
+      acceptanceCriteria:
+        - "Non-Empty Cart Validation — prevents order placement from empty cart; throws ShoppingCartEmptyOrderException"
+        - "Unique Order ID — generates order IDs using UniqueIdGenerator with '1001' prefix"
+        - "Address Collection — captures billing and shipping addresses with all required fields"
+        - "Order Total — calculates total price as sum of (unit cost × quantity) for all line items"
+        - "Order Data Capture — captures order ID, user ID, date, addresses, credit card, and all line items"
+        - "Cart Clearing — empties shopping cart after successful order placement"
+        - "Order Confirmation — displays confirmation screen with order details"
+      outOfScope:
+        - Payment processing or authorization
+        - Inventory reservation
+        - Order fulfillment or shipping
+        - Order history or tracking (handled by order-tracking)
+        - Discount or promotion application
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+      screens:
+        - "Order entry screen: collects billing address (name, street, city, state, zip, email), shipping address, and credit card information with form controls and validation"
+        - "Order confirmation screen: displays order number, total price, and confirmation message"
+        - "Cart empty error screen: displayed when customer attempts to place order from empty cart"
+
+  - slug: payment-processing
+    title: Credit Card Management
+    order: 4
+    dependsOn:
+      - user-accounts
+    priority: 0
+    change:
+      dir: openspec/changes/sx-payment-processing
+      specCapabilities:
+        - payment-processing
+    canvas:
+      problem: The system needs to store and manage customer credit card information securely for payment processing.
+      solution: Implement CreditCardEJB CMP entity with card number, type, and expiry date fields; provide CRUD operations and DTO conversion for data transfer.
+      userStories:
+        - As a customer, I want to securely store my credit card information so that I can complete purchases quickly.
+        - As the system, I need to retrieve stored credit card data for order processing.
+      acceptanceCriteria:
+        - "CMP Entity — CreditCard entity with cardNumber, cardType, expiryDate fields"
+        - "CRUD Operations — supports creation, retrieval, update, deletion of credit card records"
+        - "Expiry Parsing — parses expiry date to extract month and year; defaults to 01/2010 if unparseable"
+        - "Data Transfer — provides getData() method returning DTO for cross-tier transmission"
+        - "Transactional — all operations execute within Required transaction context"
+        - "Access Control — all methods unchecked; no authorization restrictions"
+      outOfScope:
+        - Payment authorization or processing
+        - Credit card encryption or PCI compliance
+        - Validation of card numbers (length, format)
+        - Card type specific rules
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+
+  - slug: order-tracking
+    title: Order Status Management
+    order: 6
+    dependsOn:
+      - order-placement
+    priority: 0
+    change:
+      dir: openspec/changes/sx-order-tracking
+      specCapabilities:
+        - order-tracking
+    canvas:
+      problem: Customers and administrators need to track order status through the fulfillment workflow and view order analytics.
+      solution: Implement ProcessManagerEJB for status transitions and OPCAdminFacadeEJB for order queries and analytics with a state machine (PENDING → APPROVED → COMPLETED or DENIED).
+      userStories:
+        - As a customer, I want to view my order status so that I know when it will be delivered.
+        - As an admin, I want to query orders by status so that I can manage the fulfillment workflow.
+        - As an admin, I want to view analytics on orders by date range and category so that I can understand business metrics.
+      acceptanceCriteria:
+        - "Order Status Retrieval — retrieves current status for an order"
+        - "Status Transitions — supports state machine (PENDING → APPROVED → COMPLETED or PENDING → DENIED)"
+        - "Query by Status — finds all orders in a given status using EJB-QL finder"
+        - "Order Details — retrieves order information (ID, user ID, date, total, status)"
+        - "Analytics Aggregation — calculates order count or revenue by category for date ranges"
+        - "Transactional Consistency — all operations in Required transaction context with rollback on error"
+        - "Idempotent Processing — status transitions are idempotent; duplicate messages do not cause issues"
+      outOfScope:
+        - Order fulfillment or inventory management
+        - Customer-facing order details page (UI)
+        - Notifications or alerts on status changes
+        - Historical audit trail of status changes
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+
+  - slug: order-fulfillment
+    title: Order Fulfillment and Inventory Management
+    order: 8
+    dependsOn:
+      - order-tracking
+      - supplier-management
+    priority: 0
+    change:
+      dir: openspec/changes/sx-order-fulfillment
+      specCapabilities:
+        - order-fulfillment
+    canvas:
+      problem: The system needs to process purchase orders from the order processing center, check inventory availability, reduce stock, and communicate fulfillment status back to the OPC.
+      solution: Implement asynchronous order processing via JMS with inventory atomicity checks, invoice generation for fulfilled items, and status transitions in a supplier-independent workflow.
+      userStories:
+        - As the supplier, I want to receive purchase orders via JMS and process them asynchronously.
+        - As the supplier system, I need to check inventory and reduce quantities only when stock is available.
+        - As the supplier, I want to generate invoices for fulfilled items and send them back to OPC.
+        - As an admin, I want to re-process pending orders when new inventory arrives.
+      acceptanceCriteria:
+        - "JMS Message Processing — receives and processes XML purchase orders from OPC queue"
+        - "Inventory Atomicity — compares quantity and reduces inventory in single atomic operation"
+        - "Fulfillment Check — fulfills only when inventory ≥ requested quantity; leaves items PENDING if insufficient"
+        - "Invoice Generation — creates XML invoice for fulfilled items with order and line item details"
+        - "Message Transition — sends invoices back to OPC via transition mechanism"
+        - "Pending Order Re-processing — re-attempts fulfillment for PENDING orders when inventory updated"
+        - "Transactional Integrity — all operations within Required transaction; rolls back together on failure"
+      outOfScope:
+        - Supplier relationship management
+        - Multi-supplier scenarios
+        - Partial fulfillment with multiple shipments
+        - Backorder management
+        - Supplier notification or confirmation
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+
+  - slug: supplier-management
+    title: Supplier Order Management
+    order: 7
+    dependsOn: []
+    priority: 0
+    change:
+      dir: openspec/changes/sx-supplier-management
+      specCapabilities:
+        - supplier-management
+    canvas:
+      problem: The supplier system needs to maintain supplier purchase orders, manage inventory, track fulfillment status, and provide administrative controls for inventory updates.
+      solution: Implement SupplierOrderEJB CMP entity with status workflow, InventoryEJB for stock tracking, and admin interface for inventory management with form-based authentication.
+      userStories:
+        - As the supplier system, I need to store and manage purchase orders from the OPC with unique IDs and status tracking.
+        - As the supplier system, I need to maintain an inventory database and allow administrators to update stock levels.
+        - As an admin, I want to view current inventory and update quantities so that the system reflects available stock.
+      acceptanceCriteria:
+        - "SupplierOrder Entity — persists poId, poDate, poStatus with one-to-one ContactInfo and one-to-many LineItems"
+        - "Status Workflow — supports PENDING → APPROVED → COMPLETED or PENDING → DENIED transitions"
+        - "Order Query — finds orders by status using EJB-QL finder"
+        - "Inventory Entity — tracks itemId and quantity with CMP persistence"
+        - "Inventory Update — allows quantity replacement via admin interface; triggers pending order re-processing"
+        - "Administrator Access — restricts inventory updates to 'administrator' role via security constraint"
+        - "Transactional Guarantee — all operations in Required transaction context"
+      outOfScope:
+        - Multi-warehouse inventory management
+        - Inventory reservations or holds
+        - Reorder point automation
+        - Supplier communication protocols
+        - Inventory auditing or cycle counts
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+      screens:
+        - "Inventory update screen: displays all inventory items in table with Item ID, Current Quantity, New Quantity input, and Update checkbox; restricted to administrators"
+
+  - slug: admin-operations
+    title: Administrative Order and Inventory Management
+    order: 9
+    dependsOn:
+      - supplier-management
+    priority: 0
+    change:
+      dir: openspec/changes/sx-admin-operations
+      specCapabilities:
+        - admin-operations
+    canvas:
+      problem: Administrators need to query orders by status for fulfillment tracking, view order analytics, and trigger order reprocessing when inventory is updated.
+      solution: Implement administrative dashboard with order status queries, date-range analytics, category-based reporting, and admin role-based access control.
+      userStories:
+        - As an admin, I want to view orders by status (PENDING, APPROVED, COMPLETED) to manage fulfillment workflow.
+        - As an admin, I want to query orders by date range and category to analyze business metrics.
+        - As an admin, I want to trigger reprocessing of pending orders when inventory becomes available.
+      acceptanceCriteria:
+        - "Order Query by Status — retrieves all orders in a specific status for dashboard display"
+        - "Order Query by Date Range — filters orders by creation date for analytics"
+        - "Order Query by Category — finds orders containing items from specific product categories"
+        - "Admin Authorization — restricts all admin operations to 'administrator' role"
+        - "Status Transitions — supports PENDING → APPROVED → COMPLETED or PENDING → DENIED workflow"
+        - "Transactional Safety — all operations execute in Required transaction context"
+      outOfScope:
+        - Order fulfillment execution
+        - Detailed order analytics or visualization
+        - Audit logging of administrative actions
+        - Order modification or cancellation
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+      screens:
+        - "Order management dashboard: displays orders grouped by status with filtering by date range and category; shows order ID, user, date, total, status"
+
+  - slug: notifications
+    title: Order Event Notifications
+    order: 10
+    dependsOn:
+      - order-placement
+      - order-tracking
+    priority: 0
+    change:
+      dir: openspec/changes/sx-notifications
+      specCapabilities:
+        - notifications
+    canvas:
+      problem: Customers need to be informed of order confirmations, status changes, and shipment updates via email notifications.
+      solution: Implement asynchronous email notifications via JMS message-driven beans, triggered on order events and status transitions with multi-locale support.
+      userStories:
+        - As a customer, I want to receive an email confirmation when I place an order so I have proof of purchase.
+        - As a customer, I want to be notified when my order status changes (approved, completed, denied) so I know the status of my purchase.
+        - As a customer, I want notifications in my preferred language so I can understand order information clearly.
+      acceptanceCriteria:
+        - "Order Confirmation — sends email with order ID, total, and delivery address when order is created"
+        - "Status Change Notifications — sends email when order transitions to APPROVED, DENIED, or COMPLETED"
+        - "JMS Message Processing — consumes mail messages from queue via MailerMDB.onMessage()"
+        - "Mail Message Structure — parses XML with mandatory Address, Subject, Content elements"
+        - "Locale Support — sends notifications in customer's preferred language (en_US, ja_JP, zh_CN)"
+        - "Transaction Safety — processes messages with container-managed transactions (Required)"
+      outOfScope:
+        - SMS or push notifications
+        - Email delivery confirmation or bounce handling
+        - In-app notification UI
+        - Customer notification preferences per event type
+      risksAssumptions: []
+      techStack: []
+      affectedCode: []
+
+artifacts:
+  openapi: api/openapi.yaml
+  erd: architecture/erd.mermaid
+  schema: architecture/schema.sql
+  agents: AGENTS.md

@@ -1,24 +1,63 @@
-# Agent Guide
+# Rebuild Guidance: Java Pet Store Modernization
 
-`CLAUDE.md` and `GEMINI.md` are symlinks to this file — one authored manual, whatever
-harness is reading it.
+This document provides guidance for rebuilding the legacy Java Pet Store application based on extracted specifications from the J2EE implementation.
 
-**Vortex composes four of the sections below straight into every agent's prompt**:
-`## Build & run`, `## Test & validate`, `## Conventions` and `## Gotchas`. Everything
-else is named in the prompt and read from the file on demand. Put an instruction an
-agent must obey in one of those four; put reference material anywhere else.
+## Overview
 
-Commands are NOT listed here. They are declared once, machine-readably, in
-`.vortex/config.yaml` under `commands:`, and reach every agent as a resolved table
-under `## Project commands`. This file explains the ones whose behaviour is not
-obvious; it does not restate them.
+The extracted specifications describe a classic 2000s J2EE e-commerce application. The rebuild modernizes this architecture while maintaining the core business logic and user experience.
+
+**Stack**: Vite React SPA with Nitro backend, SQLite + Drizzle ORM, TypeScript strict mode.
+
+## Key Concepts from Legacy
+
+### Authentication & Sessions
+
+- Session-based with HTTP session attribute `j_signon` (Boolean)
+- Protected resources require authentication before access
+- Multi-locale support: en_US, ja_JP, zh_CN with en_US default
+- Optional "Remember My User Name" cookie (bp_signon, 31-day expiry)
+
+### Data Model
+
+- **CMP 2.x entities** → **Drizzle ORM + SQLite**
+- **Cascade deletes**: Deleting parent must delete children (e.g., Customer ↔ Profile)
+- **Relationships**: One-to-one (Customer ↔ Profile) and one-to-many (SupplierOrder ↔ LineItems)
+- **Atomicity**: Inventory check+reduce must be atomic to prevent race conditions
+
+### Shopping Cart
+
+- Stateful session cart with itemId → quantity mapping
+- Lazy enrichment from Catalog on display
+- Locale-aware for customer-preferred language
+- Cleared after successful order placement
+
+### Order Processing
+
+- Non-empty cart validation required
+- Unique order IDs with "1001" prefix
+- Separate billing and shipping addresses
+- Total calculated as sum of (unitCost × quantity)
+
+## Capability Dependencies
+
+Build in this order:
+
+1. **user-accounts** — Foundation for authentication
+2. **shopping-cart** — Depends on user sessions
+3. **order-placement** — Depends on shopping cart + user accounts
+4. **payment-processing** — Credit card management (sibling to order-placement)
+5. **order-tracking** — Depends on order-placement for status management
+6. **order-fulfillment** — Depends on order-tracking
+7. **supplier-management** — Inventory management (can start in parallel)
 
 ## Docs
 
 - [README.md](./README.md) — routing, API handlers, database, the full feature tour
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — stack, data flow, deployment
 - [DESIGN.md](./DESIGN.md) — tokens, theming, component pattern
-- [PRODUCT.md](./PRODUCT.md) — what this is; replace for a real product
+- [PRODUCT.md](./PRODUCT.md) — product description
+- [build/manifest.yaml](./build/manifest.yaml) — capability ordering and dependencies
+- [openspec/changes/](./openspec/changes/) — detailed specifications per capability
 
 ## Build & run
 

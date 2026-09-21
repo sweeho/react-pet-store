@@ -1,0 +1,181 @@
+# EXTRACTED FROM LEGACY SOURCE — evidence of what exists, not a build target. Where this disagrees with a capability delta spec, the delta spec wins.
+openapi: 3.0.0
+info:
+  title: Java Pet Store API
+  description: Legacy Pet Store e-commerce API extracted from J2EE application
+  version: 1.3.2
+servers:
+  - url: http://localhost:5000
+paths:
+  /j_signon_check:
+    post:
+      tags:
+        - authentication
+      summary: Authenticate user
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                j_username:
+                  type: string
+                j_password:
+                  type: string
+                j_remember_username:
+                  type: string
+      responses:
+        '200':
+          description: Authentication successful, session established
+  /createuser.do:
+    post:
+      tags:
+        - authentication
+      summary: Create new user account
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                j_username:
+                  type: string
+                  maxLength: 25
+                j_password:
+                  type: string
+                j_password_2:
+                  type: string
+      responses:
+        '200':
+          description: User account created
+        '400':
+          description: Duplicate username or validation error
+  /customer.do:
+    get:
+      tags:
+        - customer
+      summary: Get customer profile
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Customer profile data
+    post:
+      tags:
+        - customer
+      summary: Update customer profile
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                givenName:
+                  type: string
+                familyName:
+                  type: string
+                email:
+                  type: string
+                telephone:
+                  type: string
+                preferredLanguage:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated successfully
+  /cart.do:
+    get:
+      tags:
+        - shopping
+      summary: Get shopping cart
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Cart items and totals
+    post:
+      tags:
+        - shopping
+      summary: Modify cart
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [add, remove, update, empty]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Cart updated
+  /order.do:
+    post:
+      tags:
+        - orders
+      summary: Place purchase order
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                billTo_givenName:
+                  type: string
+                billTo_familyName:
+                  type: string
+                shipTo_givenName:
+                  type: string
+                shipTo_familyName:
+                  type: string
+                cardNumber:
+                  type: string
+                cardType:
+                  type: string
+                expiryDate:
+                  type: string
+      responses:
+        '200':
+          description: Order placed successfully
+        '400':
+          description: Empty cart or validation error
+  /signoff.do:
+    get:
+      tags:
+        - authentication
+      summary: Sign off / logout
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: User logged out, session cleared
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: j_signon
+
+tags:
+  - name: authentication
+    description: User authentication and account management
+  - name: customer
+    description: Customer profile and preferences
+  - name: shopping
+    description: Shopping cart operations
+  - name: orders
+    description: Purchase order operations
