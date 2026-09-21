@@ -1,0 +1,27 @@
+divergences:
+  - claim: The approval threshold is a single $500 order-total value.
+    code_says: Two thresholds exist in the codebase - $500 and $50,000 - but only the $500 threshold has behavior attached. The $50,000 threshold has no effect.
+    document_says: The PRD specifies only the $500 threshold as the cutoff for human review. Notes that "A second threshold at $50,000 exists in the code but has no behaviour attached beyond the first, so all review effectively happens at one level."
+    code_ref: legacy-analysis/discovery/report.md#p31 ("Order ID Generation - Hardcoded '1001' prefix... seed/sequence strategy unclear")
+    document_ref: design/sources/markdown/java-pet-store-1-3-2-product-requirements-document/extracted.md#p214-p218
+    capability: order-fulfillment
+    severity: minor
+    notes: This is acknowledged in the source PRD as a documentation gap, not a code defect. The rebuild should clarify the $50,000 threshold's purpose or remove it.
+
+  - claim: Back-ordered orders (Approved but awaiting stock) are indistinguishable from freshly approved orders in the admin queue.
+    code_says: The ProcessManager tracks status transitions, and orders with status Approved can be either newly approved or waiting on inventory. No distinct "awaiting stock" status exists.
+    document_says: The PRD acknowledges this design limitation: "An approved order with no stock behind it stays Approved. It is not a distinct status, which means a back-ordered item and a just-approved one look the same in the admin queue." Listed as an open question: "Should back-ordered orders become a distinct status, or stay Approved with a separate stock indicator?"
+    code_ref: legacy-analysis/discovery/report.md#p94-p110 (Data Model, Calculated Fields)
+    document_ref: design/sources/markdown/java-pet-store-1-3-2-product-requirements-document/extracted.md#p185-p195
+    capability: order-fulfillment
+    severity: minor
+    notes: Both document and code acknowledge this as a limitation. It is listed as an open question in the rebuild (question 2).
+
+  - claim: Supplier staff receive no feedback about which orders their inventory update released.
+    code_says: The async notification flow (OPC sends "fulfilment request" to Supplier, Supplier sends "stock changes" back) moves data between systems but the Supplier application does not report completion back to the user who submitted the update.
+    document_says: The user manual notes under "Restock as a trigger" (Section 11) that staff get no feedback confirmation. The PRD identifies this as a usability risk but not incorrect behavior.
+    code_ref: legacy-analysis/discovery/report.md#p72-p82 (Key Business Flows, Order Approval Flow and Async messaging)
+    document_ref: design/sources/markdown/java-pet-store-1-3-2-user-manual/extracted.md#p333-p340
+    capability: supplier-management
+    severity: low
+    notes: This is an acknowledged limitation, not a defect. Suggested direction: Supplier app should report on each inventory commit how many waiting orders completed as a result.
